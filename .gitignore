@@ -1,0 +1,10 @@
+# Datos privados y archivos creados al ejecutar la aplicación
+data/
+venv/
+__pycache__/
+*.py[cod]
+
+# Configuración local y archivos del sistema
+.env
+.DS_Store
+Thumbs.db
