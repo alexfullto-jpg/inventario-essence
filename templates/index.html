@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Inventario y Ventas · Lociones</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="brand-eyebrow">Essence Collection</div>
+  <h1 class="brand-name">Inventario &amp; Control de Ventas</h1>
+  <div class="brand-status"><span class="dot"></span>Programa local · base de datos en tu computador</div>
+  <div class="brand-status" id="lanInfoBox" style="display:none;"></div>
+</header>
+
+<nav class="tabs">
+  <button class="tab-btn active" data-tab="dashboard">Panel general</button>
+  <button class="tab-btn" data-tab="inventario">Inventario</button>
+  <button class="tab-btn" data-tab="venta">Registrar venta</button>
+  <button class="tab-btn" data-tab="compra">Registrar compra</button>
+  <button class="tab-btn" data-tab="gastos">Gastos</button>
+  <button class="tab-btn" data-tab="clientes">Clientes</button>
+  <button class="tab-btn" data-tab="cuentas">Cuentas por cobrar</button>
+  <button class="tab-btn" data-tab="historial">Historial</button>
+</nav>
+
+<!-- ================= DASHBOARD ================= -->
+<section class="tab-content active" id="tab-dashboard">
+  <div class="kpi-grid" id="kpiGrid"></div>
+  <div class="card">
+    <h3>Alertas de stock bajo</h3>
+    <div class="sub">Referencias que no alcanzan para producir ni un frasco de 30ML más.</div>
+    <div id="lowStockList"></div>
+  </div>
+  <div class="two-col">
+    <div class="card"><h3>Ventas por mes</h3><div id="chartVentasMes"></div></div>
+    <div class="card"><h3>Más vendidas (unidades)</h3><div id="chartTopSellers"></div></div>
+  </div>
+  <div class="two-col">
+    <div class="card"><h3>Más vendidas (tabla)</h3><div id="topSellers"></div></div>
+    <div class="card"><h3>Últimas ventas</h3><div id="recentSales"></div></div>
+  </div>
+  <div class="card">
+    <h3>📈 Proyección de ganancias</h3>
+    <div class="sub">Basado en el promedio de utilidad por unidad vendida en los últimos meses con ventas registradas. La utilidad ya descuenta los gastos generales del negocio.</div>
+    <div id="proyeccionWrap"></div>
+  </div>
+</section>
+
+<!-- ================= INVENTARIO ================= -->
+<section class="tab-content" id="tab-inventario">
+
+  <div class="card">
+    <h3>Datos del negocio</h3>
+    <div class="field-row">
+      <div class="field"><label>Nombre del negocio</label><input type="text" id="businessNameInput"></div>
+      <div class="field"><label>Tu WhatsApp (para pie del ticket)</label><input type="text" id="businessWhatsappInput" placeholder="573..."></div>
+    </div>
+    <button class="btn small" id="saveBusinessBtn">Guardar</button>
+  </div>
+
+  <div class="card">
+    <h3>Receta de dilución</h3>
+    <div class="sub">% del volumen final que es fragancia concentrada. El resto se completa con alcohol.</div>
+    <div class="field-row" style="max-width:260px;">
+      <div class="field"><label>% de fragancia por volumen</label><input type="number" id="fragPercentInput" min="1" max="99"></div>
+    </div>
+    <div class="hint" id="recipePreview"></div>
+  </div>
+
+  <div class="two-col">
+    <div class="card">
+      <h3>Alcohol</h3>
+      <div class="field-row">
+        <div class="field"><label>Stock actual (gramos)</label><input type="number" id="alcoholStockInput"></div>
+        <div class="field"><label>Costo por gramo</label><input type="number" id="alcoholCostInput"></div>
+      </div>
+      <button class="btn small" id="saveAlcoholBtn">Guardar</button>
+      <div class="hint">Para agregar stock nuevo (compra), usa la pestaña "Registrar compra".</div>
+    </div>
+
+    <div class="card">
+      <h3>Frascos vacíos</h3>
+      <div class="field-row" style="grid-template-columns:repeat(3,1fr);">
+        <div class="field"><label>10 ML</label><input type="number" id="frasco10Input"></div>
+        <div class="field"><label>30 ML</label><input type="number" id="frasco30Input"></div>
+        <div class="field"><label>50 ML</label><input type="number" id="frasco50Input"></div>
+      </div>
+      <div class="hint" style="margin-bottom:6px;">Costo por frasco vacío (para calcular la ganancia real):</div>
+      <div class="field-row" style="grid-template-columns:repeat(3,1fr);">
+        <div class="field"><label>Costo 10 ML</label><input type="number" id="frascoCost10Input"></div>
+        <div class="field"><label>Costo 30 ML</label><input type="number" id="frascoCost30Input"></div>
+        <div class="field"><label>Costo 50 ML</label><input type="number" id="frascoCost50Input"></div>
+      </div>
+      <button class="btn small" id="saveFrascosBtn">Guardar</button>
+    </div>
+  </div>
+
+  <div class="card" style="border-color:var(--teal); background:rgba(79,123,127,0.06);">
+    <h3 style="color:var(--teal);">🔄 Precios de recarga (cliente trae su propio frasco)</h3>
+    <div class="field-row" style="grid-template-columns:repeat(3,1fr); max-width:400px;">
+      <div class="field"><label>10 ML</label><input type="number" id="recargaP10Input"></div>
+      <div class="field"><label>30 ML</label><input type="number" id="recargaP30Input"></div>
+      <div class="field"><label>50 ML</label><input type="number" id="recargaP50Input"></div>
+    </div>
+    <button class="btn small" id="saveRecargaBtn">Guardar</button>
+  </div>
+
+  <div class="card" style="border-color:var(--gold); background:rgba(201,162,39,0.08);">
+    <h3 style="color:var(--gold-soft);">📍 Localizador rápido de ubicación</h3>
+    <div class="sub">Escribe uno o varios nombres/referencias separados por coma para ver de inmediato la ubicación física de cada fragancia.</div>
+    <input type="text" class="search-input" id="locBuscarInput" placeholder="Ej: 3603, cloud, 954" style="max-width:100%;">
+    <div id="locResultados"></div>
+  </div>
+
+  <div class="card">
+    <h3>Fragancias concentradas (<span id="fragCount">0</span> referencias)</h3>
+    <div class="sub">Stock actual de concentrado en gramos por referencia.</div>
+    <input type="text" class="search-input" id="inventorySearch" placeholder="Buscar referencia...">
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Código</th><th>Nombre</th><th>Género</th><th>Ubicación</th><th>Stock (g)</th><th>Alcanza para</th><th>Costo/g</th><th>Estado</th></tr></thead>
+        <tbody id="inventoryTbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>📦 Otros productos de inventario (empaques, etiquetas, bolsas de aluminio, etc.)</h3>
+    <div class="field-row" style="grid-template-columns:2fr 1fr 1fr 1fr auto;">
+      <div class="field"><label>Nombre del producto</label><input type="text" id="otroNombreInput" placeholder="Ej: Bolsas de aluminio"></div>
+      <div class="field"><label>Unidad</label><input type="text" id="otroUnidadInput" placeholder="unidad, rollo..." value="unidad"></div>
+      <div class="field"><label>Stock actual</label><input type="number" id="otroStockInput" placeholder="0"></div>
+      <div class="field"><label>Costo por unidad</label><input type="number" id="otroCostoInput" placeholder="0"></div>
+      <div class="field" style="align-self:flex-end;"><button class="btn small primary" id="addOtroBtn" style="width:100%;">+ Agregar</button></div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Nombre</th><th>Unidad</th><th>Stock</th><th>Costo/unidad</th><th>Valor total</th><th></th></tr></thead>
+        <tbody id="otrosTbody"></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ================= REGISTRAR VENTA ================= -->
+<section class="tab-content" id="tab-venta">
+  <div class="card">
+    <h3>Datos del pedido</h3>
+    <div class="field-row">
+      <div class="field"><label>Cliente (opcional)</label><input type="text" id="ventaCliente" list="clientesDatalist"><datalist id="clientesDatalist"></datalist></div>
+      <div class="field"><label>WhatsApp del cliente (opcional)</label><input type="text" id="ventaClienteTel" placeholder="Ej: 573001234567"></div>
+      <div class="field"><label>Fecha</label><input type="date" id="ventaFecha"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Cuenta de pago</label><select id="ventaCuenta"></select></div>
+      <div class="field" style="display:flex; align-items:flex-end;">
+        <label style="display:flex; align-items:center; gap:8px; font-size:13px; color:var(--warn); cursor:pointer; margin:0;">
+          <input type="checkbox" id="ventaFiadoCheckbox" style="width:16px; height:16px; accent-color:var(--warn);">
+          🧾 Fiado (el cliente pagará después)
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Agregar producto al pedido</h3>
+    <div class="field-row">
+      <div class="field" style="grid-column:1/-1;">
+        <label>Fragancia (busca por nombre o por referencia)</label>
+        <input type="text" id="ventaFraganciaSearch" placeholder="Ej: Cloud Ariana Grande, o 954" list="fraganciaDatalist" autocomplete="off">
+        <datalist id="fraganciaDatalist"></datalist>
+      </div>
+    </div>
+    <div class="hint" id="ventaFraganciaMatch"></div>
+    <div class="field-row" style="grid-template-columns:repeat(4,1fr); margin-top:8px;">
+      <div class="field"><label>Tamaño</label>
+        <select id="ventaTamano">
+          <option value="10">10 ML</option>
+          <option value="30" selected>30 ML</option>
+          <option value="50">50 ML</option>
+        </select>
+      </div>
+      <div class="field"><label>Cantidad</label><input type="number" id="ventaCantidad" value="1" min="1"></div>
+      <div class="field"><label>Precio unitario</label><input type="number" id="ventaPrecio"></div>
+      <div class="field"><label>Descuento especial (%)</label><input type="number" id="ventaDescuento" value="0" min="0" max="100" placeholder="0"></div>
+    </div>
+    <div class="hint" id="ventaPrecioConDescuento"></div>
+    <label style="display:flex; align-items:center; gap:8px; margin:12px 0; font-size:13px; color:var(--teal); cursor:pointer;">
+      <input type="checkbox" id="ventaRecargaCheckbox" style="width:16px; height:16px; accent-color:var(--teal);">
+      🔄 El cliente trae su propio frasco (recarga — no descuenta envase)
+    </label>
+    <button class="btn primary" id="addItemToCartBtn">+ Agregar al pedido</button>
+    <div class="hint" id="addItemError" style="color:var(--danger);"></div>
+  </div>
+
+  <div class="card">
+    <h3>Pedido actual (<span id="cartItemCount">0</span> productos)</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Fragancia</th><th>Tam.</th><th>Cant.</th><th>Precio</th><th>Subtotal</th><th></th></tr></thead>
+        <tbody id="ventaCartTbody"></tbody>
+      </table>
+    </div>
+    <div style="display:flex; justify-content:space-between; align-items:center; padding-top:14px; margin-top:10px; border-top:1px solid var(--line);">
+      <span class="hint" style="margin:0;">Total del pedido</span>
+      <span style="font-size:22px; font-weight:700; color:var(--gold-soft); font-family:'Cormorant Garamond';" id="cartGrandTotal">$0</span>
+    </div>
+  </div>
+
+  <div class="card" style="background:rgba(201,162,39,0.06); border-color:var(--gold);">
+    <div class="hint" id="ventaPreview" style="font-size:13px;"></div>
+  </div>
+
+  <button class="btn primary" id="registrarVentaBtn">Registrar pedido completo</button>
+  <div class="hint" id="ventaError" style="color:var(--danger);"></div>
+
+  <div class="card" id="ticketPanel" style="display:none; border-color:var(--ok); background:rgba(74,157,111,0.06); margin-top:18px;">
+    <h3 style="color:var(--ok);">✅ Pedido registrado — Ticket #<span id="ticketFolio"></span></h3>
+    <div class="hint" id="ticketPreviewText" style="white-space:pre-wrap; font-family:monospace; font-size:12.5px; background:var(--surface-2); padding:12px; border-radius:8px; line-height:1.6;"></div>
+    <div style="display:flex; gap:10px; margin-top:14px; flex-wrap:wrap;">
+      <button class="btn primary" id="sendTicketBtn">📤 Enviar ticket por WhatsApp</button>
+      <button class="btn" id="copyTicketBtn">Copiar texto</button>
+    </div>
+  </div>
+</section>
+
+<!-- ================= REGISTRAR COMPRA ================= -->
+<section class="tab-content" id="tab-compra">
+  <div class="card">
+    <h3>Nueva compra / entrada de inventario</h3>
+    <div class="field-row">
+      <div class="field"><label>Tipo</label>
+        <select id="compraTipo">
+          <option value="fragancia">Fragancia concentrada</option>
+          <option value="alcohol">Alcohol</option>
+          <option value="frasco10">Frascos 10 ML</option>
+          <option value="frasco30">Frascos 30 ML</option>
+          <option value="frasco50">Frascos 50 ML</option>
+          <option value="otro">Otro producto (bolsas, etiquetas, etc.)</option>
+        </select>
+      </div>
+      <div class="field" id="compraFraganciaWrap">
+        <label>Fragancia (nombre o referencia)</label>
+        <input type="text" id="compraFraganciaSearch" placeholder="Ej: Cloud Ariana Grande, o 954" list="fraganciaDatalist" autocomplete="off">
+      </div>
+      <div class="field" id="compraOtroWrap" style="display:none;">
+        <label>Producto</label>
+        <select id="compraOtroSelect"></select>
+      </div>
+      <div class="field"><label id="compraCantidadLabel">Cantidad (gramos)</label><input type="number" id="compraCantidad" placeholder="Ej: 300"></div>
+      <div class="field"><label>Costo total (opcional)</label><input type="number" id="compraCosto" placeholder="Lo que le pagaste al proveedor"></div>
+    </div>
+    <div class="hint" id="compraFraganciaMatch"></div>
+    <div class="field-row">
+      <div class="field"><label>Fecha</label><input type="date" id="compraFecha"></div>
+      <div class="field" style="grid-column:span 2;"><label>Proveedor / nota (opcional)</label><input type="text" id="compraNota" placeholder="Ej: Proveedor X - factura 123"></div>
+    </div>
+    <button class="btn primary" id="registrarCompraBtn">Registrar compra</button>
+    <div class="hint" id="compraError" style="color:var(--danger);"></div>
+  </div>
+</section>
+
+<!-- ================= GASTOS ================= -->
+<section class="tab-content" id="tab-gastos">
+  <div class="kpi-grid" id="gastosKpiGrid"></div>
+  <div class="card">
+    <h3>Registrar gasto general</h3>
+    <div class="sub">Arriendo, transporte, publicidad, domicilios, y cualquier otro gasto del negocio que no sea insumo de producción.</div>
+    <div class="field-row">
+      <div class="field"><label>Fecha</label><input type="date" id="gastoFecha"></div>
+      <div class="field"><label>Categoría</label>
+        <select id="gastoCategoria">
+          <option>Arriendo</option>
+          <option>Transporte</option>
+          <option>Publicidad</option>
+          <option>Domicilios</option>
+          <option>Servicios (luz, agua, internet)</option>
+          <option>Empaques/Papelería</option>
+          <option>Otro</option>
+        </select>
+      </div>
+      <div class="field"><label>Monto</label><input type="number" id="gastoMonto" placeholder="0"></div>
+    </div>
+    <div class="field-row">
+      <div class="field" style="grid-column:1/-1;"><label>Descripción (opcional)</label><input type="text" id="gastoDescripcion" placeholder="Ej: Pago arriendo local julio"></div>
+    </div>
+    <button class="btn primary" id="addGastoBtn">+ Registrar gasto</button>
+    <div class="hint" id="gastoError" style="color:var(--danger);"></div>
+  </div>
+  <div class="card">
+    <h3>Gastos registrados</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Fecha</th><th>Categoría</th><th>Descripción</th><th>Monto</th><th></th></tr></thead>
+        <tbody id="gastosTbody"></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ================= CLIENTES ================= -->
+<section class="tab-content" id="tab-clientes">
+  <div class="card">
+    <h3>Clientes</h3>
+    <div class="sub">Historial de compras, total gastado y saldo pendiente por cliente.</div>
+    <input type="text" class="search-input" id="clientesSearch" placeholder="Buscar cliente...">
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Cliente</th><th>WhatsApp</th><th>Compras</th><th>Total comprado</th><th>Saldo pendiente</th><th>Fragancia favorita</th><th></th></tr></thead>
+        <tbody id="clientesTbody"></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="card" id="clienteDetalleCard" style="display:none;">
+    <h3 id="clienteDetalleNombre">Historial del cliente</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Fecha</th><th>Fragancia</th><th>Tam.</th><th>Cant.</th><th>Total</th><th></th></tr></thead>
+        <tbody id="clienteDetalleTbody"></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ================= CUENTAS POR COBRAR ================= -->
+<section class="tab-content" id="tab-cuentas">
+  <div class="kpi-grid" id="cuentasKpiGrid"></div>
+  <div class="card">
+    <h3>Facturas con saldo pendiente</h3>
+    <div class="filter-row">
+      <button class="pill-btn active" data-cfilter="pendientes">Pendientes</button>
+      <button class="pill-btn" data-cfilter="todas">Todas</button>
+      <input type="text" class="search-input" id="cuentasSearch" placeholder="Buscar por cliente..." style="margin-bottom:0; margin-left:auto;">
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Fecha</th><th>Folio</th><th>Cliente</th><th>Total</th><th>Abonado</th><th>Saldo</th><th>Estado</th><th></th></tr></thead>
+        <tbody id="facturasTbody"></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="card">
+    <h3>Historial de abonos</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Fecha</th><th>Folio</th><th>Cliente</th><th>Monto</th><th>Cuenta</th><th>Nota</th><th></th></tr></thead>
+        <tbody id="abonosTbody"></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ABONO MODAL -->
+<div class="overlay" id="abonoOverlay">
+  <div class="modal">
+    <h3>Registrar abono</h3>
+    <p class="hint" id="abonoFacturaInfo"></p>
+    <div class="field" style="margin-bottom:12px;"><label>Monto abonado</label><input type="number" id="abonoMontoInput"></div>
+    <div class="field" style="margin-bottom:12px;"><label>Cuenta a la que llegó el pago</label><select id="abonoCuentaInput"></select></div>
+    <div class="field" style="margin-bottom:12px;"><label>Fecha</label><input type="date" id="abonoFechaInput"></div>
+    <div class="field" style="margin-bottom:12px;"><label>Nota (opcional)</label><input type="text" id="abonoNotaInput"></div>
+    <div class="modal-actions">
+      <button class="btn" id="cancelAbonoBtn">Cancelar</button>
+      <button class="btn primary" id="confirmAbonoBtn">Registrar abono</button>
+    </div>
+  </div>
+</div>
+
+<!-- EDITAR CLIENTE DE FACTURA MODAL -->
+<div class="overlay" id="editClienteOverlay">
+  <div class="modal">
+    <h3>Editar datos del cliente</h3>
+    <p class="hint" id="editClienteFacturaInfo"></p>
+    <div class="field" style="margin-bottom:12px;"><label>Nombre del cliente</label><input type="text" id="editClienteNombreInput" list="clientesDatalist"></div>
+    <div class="field" style="margin-bottom:12px;"><label>WhatsApp del cliente (opcional)</label><input type="text" id="editClienteTelInput"></div>
+    <div class="modal-actions">
+      <button class="btn" id="cancelEditClienteBtn">Cancelar</button>
+      <button class="btn primary" id="confirmEditClienteBtn">Guardar cambios</button>
+    </div>
+  </div>
+</div>
+
+<!-- EDITAR PAGO/ABONO MODAL -->
+<div class="overlay" id="editAbonoOverlay">
+  <div class="modal">
+    <h3>Editar pago</h3>
+    <p class="hint" id="editAbonoFacturaInfo"></p>
+    <div class="field" style="margin-bottom:12px;"><label>Monto</label><input type="number" id="editAbonoMontoInput"></div>
+    <div class="field" style="margin-bottom:12px;"><label>Cuenta a la que llegó el pago</label><select id="editAbonoCuentaInput"></select></div>
+    <div class="field" style="margin-bottom:12px;"><label>Fecha</label><input type="date" id="editAbonoFechaInput"></div>
+    <div class="field" style="margin-bottom:12px;"><label>Nota (opcional)</label><input type="text" id="editAbonoNotaInput"></div>
+    <div class="modal-actions">
+      <button class="btn" id="cancelEditAbonoBtn">Cancelar</button>
+      <button class="btn primary" id="confirmEditAbonoBtn">Guardar cambios</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= HISTORIAL ================= -->
+<section class="tab-content" id="tab-historial">
+  <div class="card">
+    <h3>Historial de movimientos</h3>
+    <div class="filter-row">
+      <button class="pill-btn active" data-filter="todos">Todos</button>
+      <button class="pill-btn" data-filter="venta">Ventas</button>
+      <button class="pill-btn" data-filter="compra">Compras</button>
+      <input type="text" class="search-input" id="historialSearch" placeholder="Buscar por nombre..." style="margin-bottom:0; margin-left:auto;">
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Fecha</th><th>Tipo</th><th>Referencia</th><th>Detalle</th><th>Valor</th><th></th></tr></thead>
+        <tbody id="historialTbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Respaldo y exportación</h3>
+    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+      <button class="btn primary" id="exportExcelBtn">📊 Exportar a Excel</button>
+      <button class="btn" id="exportBackupBtn">Exportar respaldo (JSON)</button>
+      <button class="btn" id="importBackupBtn">Importar respaldo</button>
+      <input type="file" id="importFileInput" accept=".json" style="display:none;">
+    </div>
+    <div class="hint">Tu información vive en un archivo de base de datos en <code>data/inventario.db</code>, dentro de la carpeta del programa. Aun así, exporta un respaldo JSON de vez en cuando por seguridad.</div>
+  </div>
+
+  <div class="card">
+    <h3>🔗 Importar/actualizar fragancias desde un catálogo</h3>
+    <div class="hint">Sube el archivo JSON exportado desde tu catálogo de lociones para agregar o actualizar referencias (nombre, género, precios) sin tocar tu stock actual.</div>
+    <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
+      <button class="btn small primary" id="importFraganciasBtn">Importar fragancias</button>
+      <input type="file" id="importFraganciasFileInput" accept=".json" style="display:none;">
+    </div>
+    <div class="hint" id="importFraganciasStatus" style="margin-top:8px;"></div>
+  </div>
+
+  <div class="card">
+    <h3>📊 Importar gramos / costo / ubicación desde Excel</h3>
+    <div class="hint">Sube tu Excel (o CSV) con el stock, costo por gramo y ubicación de tus fragancias. Se identifican por <b>Código</b> (acepta también "Referencia"/"Ref"). Columnas reconocidas: Gramos/Stock, Costo/Costo por gramo, Ubicación/Ubicacion. Las celdas vacías no modifican el dato existente; los valores que sí traigan reemplazan el actual.</div>
+    <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
+      <button class="btn small primary" id="importExcelStockBtn">Importar Excel</button>
+      <input type="file" id="importExcelStockFileInput" accept=".xlsx,.xlsm,.csv" style="display:none;">
+    </div>
+    <div class="hint" id="importExcelStockStatus" style="margin-top:8px;"></div>
+  </div>
+</section>
+
+<!-- DELETE CONFIRM MODAL -->
+<div class="overlay" id="deleteOverlay">
+  <div class="modal">
+    <h3>¿Eliminar este movimiento?</h3>
+    <p class="hint" id="deleteMsg">Esto también revertirá el inventario afectado.</p>
+    <div class="modal-actions">
+      <button class="btn" id="cancelDeleteBtn">Cancelar</button>
+      <button class="btn danger" id="confirmDeleteBtn">Eliminar</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
