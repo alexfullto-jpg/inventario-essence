@@ -72,6 +72,12 @@ def get_config(conn):
     row = conn.execute("SELECT * FROM config WHERE id = 1").fetchone()
     d = row_to_dict(row)
     d["cuentas"] = json.loads(d.pop("cuentas_json") or "[]")
+    saldos_iniciales = json.loads(d.pop("saldos_iniciales_json") or "{}")
+    # Asegura que cada cuenta configurada tenga una entrada (0 por defecto)
+    # aunque todavía no se le haya definido un saldo inicial.
+    for c in d["cuentas"]:
+        saldos_iniciales.setdefault(c, 0)
+    d["saldosIniciales"] = saldos_iniciales
     return d
 
 
@@ -186,6 +192,18 @@ def api_config_update():
         if "cuentas" in data and isinstance(data["cuentas"], list) and len(data["cuentas"]) > 0:
             fields.append("cuentas_json = ?")
             values.append(json.dumps(data["cuentas"]))
+        if "saldosIniciales" in data and isinstance(data["saldosIniciales"], dict):
+            # Se fusiona con lo que ya había guardado, para no perder el saldo
+            # inicial de una cuenta que no vino en este request puntual.
+            row = conn.execute("SELECT saldos_iniciales_json FROM config WHERE id = 1").fetchone()
+            actuales = json.loads((row["saldos_iniciales_json"] if row else None) or "{}")
+            for k, v in data["saldosIniciales"].items():
+                try:
+                    actuales[str(k)] = float(v)
+                except (TypeError, ValueError):
+                    pass
+            fields.append("saldos_iniciales_json = ?")
+            values.append(json.dumps(actuales))
         if fields:
             conn.execute(f"UPDATE config SET {', '.join(fields)} WHERE id = 1", values)
             conn.commit()
@@ -614,6 +632,7 @@ def api_compra_create():
     costo = float(data.get("costoTotal") or 0)
     fecha = data.get("fecha") or today_str()
     nota = (data.get("nota") or "").strip()
+    cuenta = data.get("cuenta") or "Efectivo"
 
     if cantidad <= 0:
         return error_response("Ingresa una cantidad válida.")
@@ -676,9 +695,9 @@ def api_compra_create():
 
         compra_id = db.new_id()
         conn.execute(
-            "INSERT INTO compras (id, fecha, tipo, codigo, nombre, cantidad, costo_total, nota, detalle) "
-            "VALUES (?,?,?,?,?,?,?,?,?)",
-            (compra_id, fecha, tipo, ref_codigo, ref_nombre, cantidad, costo, nota, detalle),
+            "INSERT INTO compras (id, fecha, tipo, codigo, nombre, cantidad, costo_total, nota, detalle, cuenta) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?)",
+            (compra_id, fecha, tipo, ref_codigo, ref_nombre, cantidad, costo, nota, detalle, cuenta),
         )
         conn.commit()
         return jsonify({"ok": True, "id": compra_id, "detalle": detalle})
@@ -885,6 +904,7 @@ def api_gasto_create():
     categoria = (data.get("categoria") or "Otro").strip() or "Otro"
     descripcion = (data.get("descripcion") or "").strip()
     monto = float(data.get("monto") or 0)
+    cuenta = data.get("cuenta") or "Efectivo"
     if monto <= 0:
         return error_response("El monto del gasto debe ser mayor a 0.")
 
@@ -892,8 +912,8 @@ def api_gasto_create():
     conn = db.get_conn()
     try:
         conn.execute(
-            "INSERT INTO gastos (id, fecha, categoria, descripcion, monto) VALUES (?,?,?,?,?)",
-            (gasto_id, fecha, categoria, descripcion, monto),
+            "INSERT INTO gastos (id, fecha, categoria, descripcion, monto, cuenta) VALUES (?,?,?,?,?,?)",
+            (gasto_id, fecha, categoria, descripcion, monto, cuenta),
         )
         conn.commit()
         return jsonify({"ok": True, "id": gasto_id})
@@ -979,10 +999,10 @@ def api_export_excel():
                        v["frag_used_gr"], v["alcohol_used_gr"], v["cliente"]])
 
         ws2 = wb.create_sheet("Compras")
-        ws2.append(["Fecha", "Tipo", "Codigo", "Nombre", "Detalle", "Cantidad", "Costo_Total", "Nota"])
+        ws2.append(["Fecha", "Tipo", "Codigo", "Nombre", "Detalle", "Cantidad", "Costo_Total", "Cuenta", "Nota"])
         for c in conn.execute("SELECT * FROM compras ORDER BY fecha DESC"):
             ws2.append([c["fecha"], c["tipo"], c["codigo"], c["nombre"], c["detalle"], c["cantidad"],
-                        c["costo_total"], c["nota"]])
+                        c["costo_total"], c["cuenta"], c["nota"]])
 
         ws3 = wb.create_sheet("Inventario Fragancias")
         ws3.append(["Codigo", "Nombre", "Genero", "Ubicacion", "Stock_g", "Costo_g"])
@@ -995,9 +1015,9 @@ def api_export_excel():
             ws4.append([o["nombre"], o["unidad"], o["stock"], o["costo_unit"], o["stock"] * o["costo_unit"]])
 
         ws_gastos = wb.create_sheet("Gastos")
-        ws_gastos.append(["Fecha", "Categoria", "Descripcion", "Monto"])
+        ws_gastos.append(["Fecha", "Categoria", "Descripcion", "Monto", "Cuenta"])
         for g in conn.execute("SELECT * FROM gastos ORDER BY fecha DESC"):
-            ws_gastos.append([g["fecha"], g["categoria"], g["descripcion"], g["monto"]])
+            ws_gastos.append([g["fecha"], g["categoria"], g["descripcion"], g["monto"], g["cuenta"]])
 
         ws5 = wb.create_sheet("Facturas")
         ws5.append(["Folio", "Fecha", "Cliente", "Total", "Abonado", "Saldo", "Estado"])
@@ -1014,6 +1034,20 @@ def api_export_excel():
         for a in conn.execute(
                 "SELECT abonos.*, facturas.folio AS folio FROM abonos JOIN facturas ON abonos.factura_id = facturas.id ORDER BY abonos.fecha DESC"):
             ws6.append([a["folio"], a["fecha"], a["monto"], a["cuenta"], a["nota"]])
+
+        ws7 = wb.create_sheet("Saldo por cuenta")
+        ws7.append(["Cuenta", "Saldo inicial", "+ Abonos recibidos", "- Compras a proveedores", "- Gastos", "= Saldo actual"])
+        config = get_config(conn)
+        abonos_all = [row_to_dict(a) for a in conn.execute("SELECT * FROM abonos")]
+        compras_all = [row_to_dict(c) for c in conn.execute("SELECT * FROM compras")]
+        gastos_all = [row_to_dict(g) for g in conn.execute("SELECT * FROM gastos")]
+        for cuenta in config["cuentas"]:
+            inicial = config["saldosIniciales"].get(cuenta, 0)
+            entradas = sum(a["monto"] for a in abonos_all if a["cuenta"] == cuenta)
+            salidas_compras = sum(c["costo_total"] for c in compras_all if c["cuenta"] == cuenta)
+            salidas_gastos = sum(g["monto"] for g in gastos_all if g["cuenta"] == cuenta)
+            actual = inicial + entradas - salidas_compras - salidas_gastos
+            ws7.append([cuenta, inicial, entradas, salidas_compras, salidas_gastos, actual])
 
         buf = io.BytesIO()
         wb.save(buf)
