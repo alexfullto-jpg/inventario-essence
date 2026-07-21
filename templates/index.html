@@ -25,6 +25,7 @@
   <button class="tab-btn" data-tab="gastos">Gastos</button>
   <button class="tab-btn" data-tab="clientes">Clientes</button>
   <button class="tab-btn" data-tab="cuentas">Cuentas por cobrar</button>
+  <button class="tab-btn" data-tab="caja">Mis cuentas</button>
   <button class="tab-btn" data-tab="historial">Historial</button>
 </nav>
 
@@ -258,6 +259,7 @@
     <div class="hint" id="compraFraganciaMatch"></div>
     <div class="field-row">
       <div class="field"><label>Fecha</label><input type="date" id="compraFecha"></div>
+      <div class="field"><label>Cuenta desde la que pagaste</label><select id="compraCuenta"></select></div>
       <div class="field" style="grid-column:span 2;"><label>Proveedor / nota (opcional)</label><input type="text" id="compraNota" placeholder="Ej: Proveedor X - factura 123"></div>
     </div>
     <button class="btn primary" id="registrarCompraBtn">Registrar compra</button>
@@ -285,6 +287,7 @@
         </select>
       </div>
       <div class="field"><label>Monto</label><input type="number" id="gastoMonto" placeholder="0"></div>
+      <div class="field"><label>Cuenta desde la que pagaste</label><select id="gastoCuenta"></select></div>
     </div>
     <div class="field-row">
       <div class="field" style="grid-column:1/-1;"><label>Descripción (opcional)</label><input type="text" id="gastoDescripcion" placeholder="Ej: Pago arriendo local julio"></div>
@@ -296,7 +299,7 @@
     <h3>Gastos registrados</h3>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Fecha</th><th>Categoría</th><th>Descripción</th><th>Monto</th><th></th></tr></thead>
+        <thead><tr><th>Fecha</th><th>Categoría</th><th>Descripción</th><th>Monto</th><th>Cuenta</th><th></th></tr></thead>
         <tbody id="gastosTbody"></tbody>
       </table>
     </div>
@@ -400,6 +403,31 @@
     </div>
   </div>
 </div>
+
+<!-- ================= MIS CUENTAS ================= -->
+<section class="tab-content" id="tab-caja">
+  <div class="kpi-grid" id="cajaKpiGrid"></div>
+  <div class="card" style="border-color:var(--gold); background:rgba(201,162,39,0.08);">
+    <h3 style="color:var(--gold-soft);">💰 Saldo inicial por cuenta</h3>
+    <div class="sub">Ingresa cuánto tienes hoy mismo en cada cuenta para calibrar el cálculo. Solo hazlo una vez (o cuando quieras recalibrar); desde ahí, cada abono, compra y gasto que registres ajusta el saldo automáticamente.</div>
+    <div class="field-row" id="cajaSaldosInicialesWrap"></div>
+    <button class="btn small primary" id="saveSaldosInicialesBtn">Guardar saldos iniciales</button>
+  </div>
+  <div class="card">
+    <h3>Movimientos de dinero</h3>
+    <div class="sub">Abonos de clientes (entradas), compras a proveedores y gastos generales (salidas), cada uno con la cuenta por la que se movió.</div>
+    <div class="filter-row">
+      <select id="cajaCuentaFiltro" style="max-width:220px;"></select>
+      <input type="text" class="search-input" id="cajaSearch" placeholder="Buscar por descripción..." style="margin-bottom:0; margin-left:auto;">
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Fecha</th><th>Tipo</th><th>Detalle</th><th>Cuenta</th><th>Monto</th></tr></thead>
+        <tbody id="cajaMovimientosTbody"></tbody>
+      </table>
+    </div>
+  </div>
+</section>
 
 <!-- ================= HISTORIAL ================= -->
 <section class="tab-content" id="tab-historial">
