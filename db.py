@@ -62,6 +62,19 @@ def _migrate_schema(conn):
         conn.execute("ALTER TABLE ventas ADD COLUMN precio_original REAL NOT NULL DEFAULT 0")
     if "descuento_pct" not in cols:
         conn.execute("ALTER TABLE ventas ADD COLUMN descuento_pct REAL NOT NULL DEFAULT 0")
+
+    compras_cols = {row["name"] for row in conn.execute("PRAGMA table_info(compras)")}
+    if "cuenta" not in compras_cols:
+        conn.execute("ALTER TABLE compras ADD COLUMN cuenta TEXT NOT NULL DEFAULT 'Efectivo'")
+
+    gastos_cols = {row["name"] for row in conn.execute("PRAGMA table_info(gastos)")}
+    if "cuenta" not in gastos_cols:
+        conn.execute("ALTER TABLE gastos ADD COLUMN cuenta TEXT NOT NULL DEFAULT 'Efectivo'")
+
+    config_cols = {row["name"] for row in conn.execute("PRAGMA table_info(config)")}
+    if "saldos_iniciales_json" not in config_cols:
+        conn.execute("ALTER TABLE config ADD COLUMN saldos_iniciales_json TEXT NOT NULL DEFAULT '{}'")
+
     conn.commit()
 
 
