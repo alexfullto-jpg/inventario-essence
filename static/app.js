@@ -171,13 +171,14 @@ function renderTab(tab) {
     if (tab === 'gastos') renderGastos();
     if (tab === 'clientes') renderClientes();
     if (tab === 'cuentas') renderCuentas();
+    if (tab === 'caja') renderCaja();
     if (tab === 'historial') renderHistorial();
   } catch (err) {
     console.error('Error renderizando ' + tab + ':', err);
   }
 }
 function renderAll() {
-  ['dashboard', 'inventario', 'venta', 'compra', 'gastos', 'clientes', 'cuentas', 'historial'].forEach(renderTab);
+  ['dashboard', 'inventario', 'venta', 'compra', 'gastos', 'clientes', 'cuentas', 'caja', 'historial'].forEach(renderTab);
   renderLanInfo();
 }
 
@@ -725,6 +726,67 @@ function sendTicketWhatsApp(msg, clienteTel) {
   window.open(url, '_blank');
 }
 
+// ---------------------------------------------------------------------------
+// Estado de cuenta por WhatsApp (saldo pendiente del cliente, actualizado
+// con cada abono que se registre)
+// ---------------------------------------------------------------------------
+
+// Arma el mensaje de estado de cuenta para TODAS las facturas pendientes de
+// un cliente (usado desde la pestaña Clientes).
+function buildEstadoCuentaMessageCliente(nombreCliente) {
+  const facturas = DATA.facturas.filter(f => f.cliente === nombreCliente && f.saldo > 0)
+    .sort((a, b) => a.fecha.localeCompare(b.fecha));
+  const lines = [];
+  lines.push(`📋 *Estado de cuenta — ${DATA.config.business_name}*`);
+  lines.push(`Cliente: ${nombreCliente}`);
+  lines.push('');
+  if (facturas.length === 0) {
+    lines.push('✅ No tienes saldo pendiente. ¡Estás al día!');
+  } else {
+    facturas.forEach(f => {
+      const abonado = f.abonos.reduce((s, a) => s + a.monto, 0);
+      lines.push(`Ticket #${String(f.folio).padStart(4, '0')} (${f.fecha})`);
+      lines.push(`Total: ${fmtCOP(f.total)}  ·  Abonado: ${fmtCOP(abonado)}  ·  Saldo: *${fmtCOP(f.saldo)}*`);
+      lines.push('');
+    });
+    const totalSaldo = facturas.reduce((s, f) => s + f.saldo, 0);
+    lines.push(`*Saldo total pendiente: ${fmtCOP(totalSaldo)}*`);
+  }
+  lines.push('');
+  lines.push('¡Gracias por tu confianza! 🌸');
+  if (DATA.config.business_whatsapp) lines.push(`Cualquier duda, escríbenos: +${DATA.config.business_whatsapp}`);
+  return lines.join('\n');
+}
+
+// Arma el estado de cuenta de UNA sola factura (usado desde Cuentas por cobrar).
+function buildEstadoCuentaMessageFactura(factura) {
+  const abonado = factura.abonos.reduce((s, a) => s + a.monto, 0);
+  const lines = [];
+  lines.push(`📋 *Estado de cuenta — ${DATA.config.business_name}*`);
+  if (factura.cliente) lines.push(`Cliente: ${factura.cliente}`);
+  lines.push(`Ticket #${String(factura.folio).padStart(4, '0')} (${factura.fecha})`);
+  lines.push('');
+  lines.push(`Total: ${fmtCOP(factura.total)}`);
+  lines.push(`Abonado: ${fmtCOP(abonado)}`);
+  lines.push(`*Saldo pendiente: ${fmtCOP(factura.saldo)}*`);
+  lines.push('');
+  lines.push(factura.saldo > 0 ? '¡Gracias por tu confianza! 🌸' : '✅ Factura pagada en su totalidad. ¡Gracias! 🌸');
+  if (DATA.config.business_whatsapp) lines.push(`Cualquier duda, escríbenos: +${DATA.config.business_whatsapp}`);
+  return lines.join('\n');
+}
+
+function sendEstadoCuentaCliente(nombreCliente) {
+  const cliente = DATA.clientes.find(c => c.nombre === nombreCliente);
+  const msg = buildEstadoCuentaMessageCliente(nombreCliente);
+  sendTicketWhatsApp(msg, cliente ? cliente.telefono : '');
+}
+function sendEstadoCuentaFactura(facturaId) {
+  const factura = DATA.facturas.find(f => f.id === facturaId);
+  if (!factura) { showToast('No se encontró esa factura.', true); return; }
+  const msg = buildEstadoCuentaMessageFactura(factura);
+  sendTicketWhatsApp(msg, factura.cliente_tel);
+}
+
 // Rebuilds and reopens the WhatsApp ticket for a past sale — used both from
 // Historial and from a client's purchase history, so it can be resent
 // anytime a client asks for it again.
@@ -783,7 +845,8 @@ document.getElementById('registrarVentaBtn').addEventListener('click', () => run
 function renderCompraTab() {
   populateFraganciaDatalist();
   populateOtroSelect();
-  document.getElementById('compraFecha').value = todayStr();
+  if (!document.getElementById('compraFecha').value) document.getElementById('compraFecha').value = todayStr();
+  populateCuentaSelect('compraCuenta');
   toggleCompraFields();
 }
 function populateOtroSelect() {
@@ -820,10 +883,11 @@ document.getElementById('registrarCompraBtn').addEventListener('click', () => ru
   const costoTotal = Number(document.getElementById('compraCosto').value) || 0;
   const fecha = document.getElementById('compraFecha').value || todayStr();
   const nota = document.getElementById('compraNota').value.trim();
+  const cuenta = document.getElementById('compraCuenta').value;
 
   if (cantidad <= 0) { errEl.textContent = 'Ingresa una cantidad válida.'; throw new Error('__silent__cantidad'); }
 
-  const payload = { tipo, cantidad, costoTotal, fecha, nota };
+  const payload = { tipo, cantidad, costoTotal, fecha, nota, cuenta };
   if (tipo === 'fragancia') {
     const res = resolveFragancia(document.getElementById('compraFraganciaSearch').value);
     if (!res.match) { errEl.textContent = 'Busca y selecciona una fragancia válida (por nombre o referencia).'; throw new Error('__silent__frag'); }
@@ -846,6 +910,7 @@ document.getElementById('registrarCompraBtn').addEventListener('click', () => ru
 
 function renderGastos() {
   if (!document.getElementById('gastoFecha').value) document.getElementById('gastoFecha').value = todayStr();
+  populateCuentaSelect('gastoCuenta');
 
   const ym = new Date().toISOString().slice(0, 7);
   const gastosMes = DATA.gastos.filter(g => g.fecha.slice(0, 7) === ym).reduce((s, g) => s + g.monto, 0);
@@ -863,13 +928,14 @@ function renderGastos() {
   const tbody = document.getElementById('gastosTbody');
   const gastos = [...DATA.gastos].sort((a, b) => b.fecha.localeCompare(a.fecha));
   tbody.innerHTML = gastos.length === 0
-    ? '<tr><td colspan="5"><div class="empty-note">Aún no has registrado gastos.</div></td></tr>'
+    ? '<tr><td colspan="6"><div class="empty-note">Aún no has registrado gastos.</div></td></tr>'
     : gastos.map(g => `
       <tr>
         <td>${g.fecha}</td>
         <td><span class="tag mid">${escapeHtml(g.categoria)}</span></td>
         <td>${escapeHtml(g.descripcion)}</td>
         <td>${fmtCOP(g.monto)}</td>
+        <td>${escapeHtml(g.cuenta || '—')}</td>
         <td><button class="btn small danger" data-id="${g.id}">Eliminar</button></td>
       </tr>`).join('');
 }
@@ -881,9 +947,10 @@ document.getElementById('addGastoBtn').addEventListener('click', () => runAction
   const categoria = document.getElementById('gastoCategoria').value;
   const descripcion = document.getElementById('gastoDescripcion').value.trim();
   const monto = Number(document.getElementById('gastoMonto').value) || 0;
+  const cuenta = document.getElementById('gastoCuenta').value;
   if (monto <= 0) { errEl.textContent = 'Ingresa un monto válido.'; throw new Error('__silent__monto'); }
 
-  await api('/api/gasto', { method: 'POST', body: JSON.stringify({ fecha, categoria, descripcion, monto }) });
+  await api('/api/gasto', { method: 'POST', body: JSON.stringify({ fecha, categoria, descripcion, monto, cuenta }) });
   document.getElementById('gastoMonto').value = '';
   document.getElementById('gastoDescripcion').value = '';
   showToast('Gasto registrado');
@@ -931,12 +998,17 @@ function renderClientes() {
       <td>${fmtCOP(s.totalComprado)}</td>
       <td>${s.saldoPendiente > 0 ? `<span class="tag low">${fmtCOP(s.saldoPendiente)}</span>` : '—'}</td>
       <td>${escapeHtml(s.favorita)}</td>
-      <td><button class="btn small" data-ver="${escapeAttr(c.nombre)}">Ver historial</button></td>
+      <td style="display:flex; gap:6px; flex-wrap:wrap;">
+        <button class="btn small" data-ver="${escapeAttr(c.nombre)}">Ver historial</button>
+        ${s.saldoPendiente > 0 ? `<button class="btn small primary" data-estado="${escapeAttr(c.nombre)}">📤 Estado de cuenta</button>` : ''}
+      </td>
     </tr>`;
   }).join('');
 }
 document.getElementById('clientesSearch').addEventListener('input', debounce(renderClientes, 150));
 document.getElementById('clientesTbody').addEventListener('click', (e) => {
+  const estadoBtn = e.target.closest('button[data-estado]');
+  if (estadoBtn) { sendEstadoCuentaCliente(estadoBtn.getAttribute('data-estado')); return; }
   const btn = e.target.closest('button[data-ver]');
   if (!btn) return;
   const nombre = btn.getAttribute('data-ver');
@@ -999,6 +1071,7 @@ function renderCuentas() {
         <td><span class="tag ${tagClass}">${estadoLabel}</span></td>
         <td style="display:flex; gap:6px; flex-wrap:wrap;">
           ${f.saldo > 0 ? `<button class="btn small primary" data-abonar="${f.id}">+ Abonar</button>` : ''}
+          <button class="btn small" data-estadofactura="${f.id}" title="Enviar estado de cuenta por WhatsApp">📤 Estado</button>
           <button class="btn small" data-editcliente="${f.id}">✏️ Cliente</button>
         </td>
       </tr>`;
@@ -1021,6 +1094,8 @@ function renderCuentas() {
 document.getElementById('facturasTbody').addEventListener('click', (e) => {
   const abonarBtn = e.target.closest('button[data-abonar]');
   if (abonarBtn) { openAbonoModal(abonarBtn.getAttribute('data-abonar')); return; }
+  const estadoBtn = e.target.closest('button[data-estadofactura]');
+  if (estadoBtn) { sendEstadoCuentaFactura(estadoBtn.getAttribute('data-estadofactura')); return; }
   const editBtn = e.target.closest('button[data-editcliente]');
   if (editBtn) openEditClienteModal(editBtn.getAttribute('data-editcliente'));
 });
@@ -1116,6 +1191,112 @@ document.getElementById('confirmEditAbonoBtn').addEventListener('click', () => r
   editAbonoTarget = null;
   document.getElementById('editAbonoOverlay').classList.remove('open');
   showToast('Pago actualizado');
+}));
+
+// ---------------------------------------------------------------------------
+// MIS CUENTAS (saldo real en Efectivo / Nequi / Bancolombia / Nu, etc.)
+// ---------------------------------------------------------------------------
+
+// Saldo de una cuenta = saldo inicial que configuraste + abonos de clientes
+// recibidos en esa cuenta - compras a proveedores pagadas desde esa cuenta -
+// gastos generales pagados desde esa cuenta.
+function saldoPorCuenta(cuenta) {
+  const inicial = Number((DATA.config.saldosIniciales || {})[cuenta]) || 0;
+  let entradas = 0, salidasCompras = 0, salidasGastos = 0;
+  DATA.facturas.forEach(f => f.abonos.forEach(a => { if (a.cuenta === cuenta) entradas += a.monto; }));
+  DATA.compras.forEach(c => { if (c.cuenta === cuenta) salidasCompras += (c.costo_total || 0); });
+  DATA.gastos.forEach(g => { if (g.cuenta === cuenta) salidasGastos += g.monto; });
+  return inicial + entradas - salidasCompras - salidasGastos;
+}
+
+function cuentasList() {
+  return (DATA.config.cuentas && DATA.config.cuentas.length) ? DATA.config.cuentas
+    : ['Efectivo', 'Nequi', 'Bancolombia', 'Nu Bank'];
+}
+
+function renderCaja() {
+  const cuentas = cuentasList();
+
+  document.getElementById('cajaKpiGrid').innerHTML = cuentas.map(c => {
+    const saldo = saldoPorCuenta(c);
+    return `<div class="kpi ${saldo >= 0 ? 'ok' : 'danger'}"><div class="label">${escapeHtml(c)}</div><div class="value">${fmtCOP(saldo)}</div></div>`;
+  }).join('') + `<div class="kpi ok"><div class="label">Total en todas las cuentas</div><div class="value">${fmtCOP(cuentas.reduce((s, c) => s + saldoPorCuenta(c), 0))}</div></div>`;
+
+  // Inputs de saldo inicial (solo repinta si no se está editando activamente)
+  const wrap = document.getElementById('cajaSaldosInicialesWrap');
+  if (document.activeElement && document.activeElement.closest('#cajaSaldosInicialesWrap')) {
+    // no repintar mientras el usuario está escribiendo, para no perder el foco
+  } else {
+    wrap.innerHTML = cuentas.map(c => `
+      <div class="field">
+        <label>${escapeHtml(c)}</label>
+        <input type="number" data-saldoinicial="${escapeAttr(c)}" value="${Number((DATA.config.saldosIniciales || {})[c]) || 0}">
+      </div>`).join('');
+  }
+
+  // Filtro de cuenta para movimientos
+  const filtroSel = document.getElementById('cajaCuentaFiltro');
+  const filtroActual = filtroSel.value || 'todas';
+  filtroSel.innerHTML = '<option value="todas">Todas las cuentas</option>' +
+    cuentas.map(c => `<option value="${escapeAttr(c)}">${escapeHtml(c)}</option>`).join('');
+  filtroSel.value = filtroActual;
+
+  renderCajaMovimientos();
+}
+
+function renderCajaMovimientos() {
+  const cuentaFiltro = document.getElementById('cajaCuentaFiltro').value || 'todas';
+  const q = (document.getElementById('cajaSearch').value || '').trim().toLowerCase();
+
+  let items = [];
+  DATA.facturas.forEach(f => f.abonos.forEach(a => items.push({
+    fecha: a.fecha, tipo: 'entrada', cuenta: a.cuenta,
+    detalle: `Abono · ${f.cliente || 'Cliente sin nombre'} (Ticket #${String(f.folio).padStart(4, '0')})${a.nota ? ' · ' + a.nota : ''}`,
+    monto: a.monto,
+  })));
+  DATA.compras.forEach(c => {
+    if (!c.costo_total) return; // compras sin costo registrado no mueven dinero
+    items.push({
+      fecha: c.fecha, tipo: 'compra', cuenta: c.cuenta,
+      detalle: `Compra · ${c.nombre || c.detalle}${c.nota ? ' · ' + c.nota : ''}`,
+      monto: -c.costo_total,
+    });
+  });
+  DATA.gastos.forEach(g => items.push({
+    fecha: g.fecha, tipo: 'gasto', cuenta: g.cuenta,
+    detalle: `Gasto · ${g.categoria}${g.descripcion ? ' · ' + g.descripcion : ''}`,
+    monto: -g.monto,
+  }));
+
+  items = items.filter(it => {
+    if (cuentaFiltro !== 'todas' && it.cuenta !== cuentaFiltro) return false;
+    if (q && !it.detalle.toLowerCase().includes(q)) return false;
+    return true;
+  });
+  items.sort((a, b) => b.fecha.localeCompare(a.fecha));
+
+  const tagFor = { entrada: 'ok', compra: 'low', gasto: 'mid' };
+  const labelFor = { entrada: 'Entrada', compra: 'Compra', gasto: 'Gasto' };
+  const tbody = document.getElementById('cajaMovimientosTbody');
+  tbody.innerHTML = items.length === 0
+    ? '<tr><td colspan="5"><div class="empty-note">No hay movimientos que coincidan.</div></td></tr>'
+    : items.map(it => `<tr>
+        <td>${it.fecha}</td>
+        <td><span class="tag ${tagFor[it.tipo]}">${labelFor[it.tipo]}</span></td>
+        <td>${escapeHtml(it.detalle)}</td>
+        <td>${escapeHtml(it.cuenta || '—')}</td>
+        <td style="color:${it.monto >= 0 ? 'var(--ok)' : 'var(--danger)'};">${it.monto >= 0 ? '+' : '-'}${fmtCOP(Math.abs(it.monto))}</td>
+      </tr>`).join('');
+}
+document.getElementById('cajaCuentaFiltro').addEventListener('change', renderCajaMovimientos);
+document.getElementById('cajaSearch').addEventListener('input', debounce(renderCajaMovimientos, 150));
+
+document.getElementById('saveSaldosInicialesBtn').addEventListener('click', () => runAction(async () => {
+  const inputs = document.querySelectorAll('#cajaSaldosInicialesWrap input[data-saldoinicial]');
+  const saldosIniciales = {};
+  inputs.forEach(inp => { saldosIniciales[inp.getAttribute('data-saldoinicial')] = Number(inp.value) || 0; });
+  await api('/api/config', { method: 'POST', body: JSON.stringify({ saldosIniciales }) });
+  showToast('Saldos iniciales guardados');
 }));
 
 // ---------------------------------------------------------------------------
