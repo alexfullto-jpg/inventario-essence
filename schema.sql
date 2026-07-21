@@ -17,7 +17,8 @@ CREATE TABLE IF NOT EXISTS config (
     frasco_f10_cost REAL NOT NULL DEFAULT 0,
     frasco_f30_cost REAL NOT NULL DEFAULT 0,
     frasco_f50_cost REAL NOT NULL DEFAULT 0,
-    cuentas_json TEXT NOT NULL DEFAULT '["Efectivo","Nequi","Bancolombia","Nu Bank"]'
+    cuentas_json TEXT NOT NULL DEFAULT '["Efectivo","Nequi","Bancolombia","Nu Bank"]',
+    saldos_iniciales_json TEXT NOT NULL DEFAULT '{}'
 );
 
 CREATE TABLE IF NOT EXISTS fragancias (
@@ -78,6 +79,7 @@ CREATE TABLE IF NOT EXISTS compras (
     costo_total REAL NOT NULL DEFAULT 0,
     nota TEXT NOT NULL DEFAULT '',
     detalle TEXT NOT NULL DEFAULT '',
+    cuenta TEXT NOT NULL DEFAULT 'Efectivo',
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -105,6 +107,7 @@ CREATE TABLE IF NOT EXISTS gastos (
     categoria TEXT NOT NULL DEFAULT 'Otro',
     descripcion TEXT NOT NULL DEFAULT '',
     monto REAL NOT NULL DEFAULT 0,
+    cuenta TEXT NOT NULL DEFAULT 'Efectivo',
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
