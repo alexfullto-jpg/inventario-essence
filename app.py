@@ -1059,6 +1059,126 @@ def api_export_excel():
         conn.close()
 
 
+# ---------------------------------------------------------------------------
+# Logística: preparación y despacho de pedidos
+# ---------------------------------------------------------------------------
+
+# ── MIGRACIÓN (ejecutar UNA sola vez) ──────────────────────
+# Visita: https://alexfullto.pythonanywhere.com/admin/migrar-logistica
+# Después puedes dejar la ruta; si la vuelves a visitar no pasa nada.
+
+@app.route("/admin/migrar-logistica")
+def admin_migrar_logistica():
+    conn = db.get_conn()
+    try:
+        conn.execute(
+            "ALTER TABLE ventas ADD COLUMN estado_logistica TEXT NOT NULL DEFAULT 'pendiente'"
+        )
+        conn.commit()
+        msg = "✅ Columna estado_logistica creada. Ya puedes usar /logistica"
+    except Exception as e:
+        msg = f"ℹ️ {e} — (probablemente ya existía, no pasa nada)"
+    finally:
+        conn.close()
+    return msg
+
+
+# ── PÁGINA logistica.html ───────────────────────────────────
+@app.route("/logistica")
+def logistica_page():
+    return render_template("logistica.html")
+
+
+# ── API: lista de pedidos agrupados por folio ───────────────
+@app.route("/api/logistica/pedidos")
+def api_logistica_pedidos():
+    conn = db.get_conn()
+    try:
+        rows = conn.execute("""
+            SELECT
+                v.folio,
+                v.cliente,
+                v.cliente_tel,
+                v.fecha,
+                MIN(v.estado_logistica)  AS estado_logistica,
+                COUNT(*)                  AS num_items,
+                SUM(v.cantidad)           AS num_unidades,
+                SUM(v.total)              AS total_pedido
+            FROM ventas v
+            GROUP BY v.folio
+            ORDER BY v.folio DESC
+        """).fetchall()
+        return jsonify({"ok": True, "pedidos": [row_to_dict(r) for r in rows]})
+    finally:
+        conn.close()
+
+
+# ── API: detalle de un pedido (ítems con ubicación) ─────────
+@app.route("/api/logistica/pedido/<int:folio>")
+def api_logistica_pedido(folio):
+    conn = db.get_conn()
+    try:
+        # Marcar en_picking si aún está pendiente
+        conn.execute(
+            "UPDATE ventas SET estado_logistica = 'en_picking' "
+            "WHERE folio = ? AND estado_logistica = 'pendiente'",
+            [folio]
+        )
+        conn.commit()
+
+        items = conn.execute("""
+            SELECT
+                v.id,
+                v.nombre,
+                v.tamano,
+                v.cantidad,
+                v.precio_unit,
+                v.total,
+                v.es_recarga,
+                v.estado_logistica,
+                COALESCE(f.ubicacion, '') AS ubicacion
+            FROM ventas v
+            LEFT JOIN fragancias f ON v.codigo = f.codigo
+            WHERE v.folio = ?
+            ORDER BY f.ubicacion ASC, v.nombre ASC
+        """, [folio]).fetchall()
+
+        if not items:
+            return jsonify({"ok": False, "error": "Pedido no encontrado"}), 404
+
+        primer = items[0]
+        return jsonify({
+            "ok": True,
+            "folio": folio,
+            "cliente": primer["cliente"],
+            "cliente_tel": primer["cliente_tel"],
+            "fecha": primer["fecha"],
+            "estado": primer["estado_logistica"],
+            "total_pedido": sum(i["total"] for i in items),
+            "items": [row_to_dict(i) for i in items],
+        })
+    finally:
+        conn.close()
+
+
+# ── API: liberar pedido ─────────────────────────────────────
+@app.route("/api/logistica/liberar/<int:folio>", methods=["POST"])
+def api_logistica_liberar(folio):
+    conn = db.get_conn()
+    try:
+        conn.execute(
+            "UPDATE ventas SET estado_logistica = 'listo' WHERE folio = ?",
+            [folio]
+        )
+        conn.commit()
+        return jsonify({"ok": True})
+    except Exception as e:
+        conn.rollback()
+        return error_response(f"No se pudo liberar el pedido: {e}", 500)
+    finally:
+        conn.close()
+
+
 if __name__ == "__main__":
     import os as _os
     import signal as _signal
