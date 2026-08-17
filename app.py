@@ -1136,6 +1136,9 @@ def api_logistica_pedido(folio):
                 v.total,
                 v.es_recarga,
                 v.estado_logistica,
+                v.cliente,
+                v.cliente_tel,
+                v.fecha,
                 COALESCE(f.ubicacion, '') AS ubicacion
             FROM ventas v
             LEFT JOIN fragancias f ON v.codigo = f.codigo
