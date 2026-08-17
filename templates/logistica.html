@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Logística — Essence Collection</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --oro:    #C9A96E;
+    --negro:  #1A1A1A;
+    --fondo:  #F7F5F2;
+    --borde:  #E0DBD3;
+    --gris:   #5C5752;
+    --verde:  #2E7D32;
+    --verde-bg: #E8F5E9;
+    --azul:   #1565C0;
+    --azul-bg: #E3F2FD;
+    --naranja: #E65100;
+    --naranja-bg: #FFF3E0;
+    --rojo:   #C62828;
+  }
+
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: var(--fondo);
+    color: var(--negro);
+    min-height: 100vh;
+  }
+
+  /* ── TOP BAR ── */
+  .topbar {
+    background: var(--negro);
+    color: #fff;
+    padding: 0 20px;
+    height: 54px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .topbar-left { display: flex; align-items: center; gap: 12px; }
+  .topbar-logo {
+    font-size: 1.05rem;
+    font-weight: 800;
+    letter-spacing: -0.3px;
+  }
+  .topbar-logo span { color: var(--oro); }
+
+  .topbar-back {
+    color: rgba(255,255,255,0.6);
+    font-size: 0.82rem;
+    text-decoration: none;
+    padding: 6px 12px;
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 6px;
+    transition: all 0.15s;
+  }
+  .topbar-back:hover { color: #fff; border-color: rgba(255,255,255,0.5); }
+
+  /* ── VISTA: LISTA DE PEDIDOS ── */
+  #vista-lista { display: block; }
+  #vista-picking { display: none; }
+
+  .contenedor {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 24px 16px 100px;
+  }
+
+  .seccion-titulo {
+    font-size: 1.3rem;
+    font-weight: 800;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  /* ── CONTADORES ── */
+  .counts {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+
+  .count-pill {
+    background: #fff;
+    border: 1.5px solid var(--borde);
+    border-radius: 10px;
+    padding: 10px 20px;
+    text-align: center;
+    min-width: 88px;
+    cursor: pointer;
+    transition: border-color 0.15s;
+  }
+  .count-pill:hover { border-color: var(--oro); }
+  .count-pill.activo { border-color: var(--negro); background: var(--negro); }
+  .count-pill.activo .count-num,
+  .count-pill.activo .count-lbl { color: #fff; }
+
+  .count-num { font-size: 1.5rem; font-weight: 800; line-height: 1; color: var(--negro); }
+  .count-lbl { font-size: 0.7rem; font-weight: 700; color: var(--gris); margin-top: 3px; }
+
+  /* ── LISTA PEDIDOS ── */
+  .pedidos-lista { display: flex; flex-direction: column; gap: 10px; }
+
+  .pedido-card {
+    background: #fff;
+    border: 1.5px solid var(--borde);
+    border-radius: 12px;
+    padding: 14px 18px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    cursor: pointer;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .pedido-card:hover {
+    border-color: var(--oro);
+    box-shadow: 0 2px 12px rgba(201,169,110,0.18);
+  }
+
+  .pedido-folio {
+    background: var(--negro);
+    color: #fff;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 1rem;
+    font-weight: 900;
+    min-width: 52px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+
+  .pedido-info { flex: 1; min-width: 0; }
+  .pedido-cliente {
+    font-weight: 700;
+    font-size: 0.97rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .pedido-meta {
+    font-size: 0.78rem;
+    color: var(--gris);
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 3px;
+  }
+
+  .badge {
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.72rem;
+    font-weight: 800;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .badge-pendiente  { background: var(--naranja-bg); color: var(--naranja); }
+  .badge-en_picking { background: var(--azul-bg);    color: var(--azul); }
+  .badge-listo      { background: var(--verde-bg);   color: var(--verde); }
+
+  .pedido-arrow { color: var(--borde); font-size: 1.2rem; flex-shrink: 0; }
+
+  /* ── VISTA PICKING ── */
+  .pick-header {
+    background: var(--negro);
+    color: #fff;
+    border-radius: 14px;
+    padding: 20px 22px;
+    margin-bottom: 20px;
+  }
+
+  .pick-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 14px;
+  }
+
+  .pick-folio { font-size: 1.8rem; font-weight: 900; line-height: 1; }
+  .pick-folio small { font-size: 0.9rem; font-weight: 400; opacity: 0.6; }
+
+  .pick-datos {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    font-size: 0.85rem;
+    opacity: 0.88;
+  }
+  .pick-dato strong { font-weight: 700; opacity: 1; }
+
+  .progreso-wrap {
+    margin-top: 16px;
+    background: rgba(255,255,255,0.15);
+    border-radius: 6px;
+    height: 8px;
+    overflow: hidden;
+  }
+  .progreso-bar {
+    height: 100%;
+    background: var(--oro);
+    border-radius: 6px;
+    transition: width 0.3s ease;
+  }
+  .progreso-txt {
+    font-size: 0.75rem;
+    opacity: 0.65;
+    text-align: right;
+    margin-top: 5px;
+  }
+
+  /* ── ITEMS PICKING ── */
+  .items-lbl {
+    font-size: 0.72rem;
+    font-weight: 800;
+    color: var(--gris);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-bottom: 10px;
+  }
+
+  .items-lista { display: flex; flex-direction: column; gap: 10px; }
+
+  .item-card {
+    background: #fff;
+    border: 2px solid var(--borde);
+    border-radius: 12px;
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    user-select: none;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .item-card.recogido {
+    border-color: var(--verde);
+    background: var(--verde-bg);
+  }
+
+  .item-chk {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    border: 2.5px solid var(--borde);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.9rem;
+    flex-shrink: 0;
+    transition: all 0.15s;
+    background: #fff;
+  }
+  .item-card.recogido .item-chk {
+    background: var(--verde);
+    border-color: var(--verde);
+    color: #fff;
+  }
+
+  .item-info { flex: 1; min-width: 0; }
+  .item-nombre {
+    font-weight: 700;
+    font-size: 0.95rem;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .item-card.recogido .item-nombre {
+    text-decoration: line-through;
+    color: var(--gris);
+  }
+  .item-det {
+    font-size: 0.78rem;
+    color: var(--gris);
+    display: flex; gap: 10px; flex-wrap: wrap;
+    margin-top: 3px;
+  }
+
+  .item-ubi {
+    background: var(--negro);
+    color: #fff;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 800;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .item-card.recogido .item-ubi { background: var(--verde); }
+  .item-ubi.sin { background: #ccc; color: #777; font-weight: 500; }
+
+  /* ── TOTALES ── */
+  .totales-card {
+    background: #fff;
+    border: 1.5px solid var(--borde);
+    border-radius: 12px;
+    padding: 14px 18px;
+    margin-top: 16px;
+    display: flex;
+    justify-content: space-around;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .tot-item { text-align: center; }
+  .tot-val { font-size: 1.15rem; font-weight: 800; }
+  .tot-lbl { font-size: 0.7rem; font-weight: 700; color: var(--gris); margin-top: 2px; }
+
+  /* ── BANNER LISTO ── */
+  .banner-listo {
+    background: var(--verde-bg);
+    border: 2px solid var(--verde);
+    color: var(--verde);
+    border-radius: 12px;
+    padding: 14px 20px;
+    text-align: center;
+    font-weight: 700;
+    margin-bottom: 18px;
+  }
+
+  /* ── BARRA FIJA DE ACCIONES ── */
+  .acciones {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: #fff;
+    border-top: 1.5px solid var(--borde);
+    padding: 12px 16px;
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    z-index: 200;
+  }
+
+  .btn {
+    padding: 13px 20px;
+    border-radius: 10px;
+    font-size: 0.92rem;
+    font-weight: 700;
+    cursor: pointer;
+    border: none;
+    transition: opacity 0.15s;
+    display: flex; align-items: center; gap: 7px;
+  }
+  .btn:disabled { opacity: 0.38; cursor: not-allowed; }
+  .btn-back    { background: #fff; color: var(--gris);  border: 1.5px solid var(--borde); }
+  .btn-print   { background: #fff; color: var(--negro); border: 1.5px solid var(--borde); }
+  .btn-liberar { background: #388E3C; color: #fff; flex: 1; max-width: 320px; justify-content: center; }
+
+  /* ── EMPTY / LOADER / ERROR ── */
+  .empty-msg {
+    text-align: center;
+    padding: 56px 20px;
+    color: var(--gris);
+  }
+  .empty-msg .icono { font-size: 2.8rem; margin-bottom: 12px; }
+  .empty-msg h3 { color: var(--negro); margin-bottom: 6px; }
+
+  .loader {
+    text-align: center;
+    padding: 48px;
+    color: var(--gris);
+    font-size: 0.9rem;
+  }
+
+  /* ── PRINT ── */
+  @media print {
+    .topbar, .acciones { display: none !important; }
+    body { background: #fff !important; }
+    .contenedor { padding: 10px; }
+    .item-card { break-inside: avoid; border: 1px solid #ccc !important; background: #fff !important; }
+    .pick-header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .item-chk, .item-card.recogido .item-chk { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+
+  @media (max-width: 520px) {
+    .pick-datos { grid-template-columns: 1fr; }
+    .pick-folio { font-size: 1.5rem; }
+    .topbar-logo { font-size: 0.92rem; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-left">
+    <div class="topbar-logo">Essence <span>Collection</span></div>
+  </div>
+  <a href="/" class="topbar-back">← App</a>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     VISTA 1: LISTA DE PEDIDOS
+══════════════════════════════════════════════ -->
+<div id="vista-lista">
+  <div class="contenedor">
+    <div class="seccion-titulo">📦 Logística</div>
+
+    <div class="counts" id="counts">
+      <div class="count-pill activo" onclick="filtrar('todos', this)">
+        <div class="count-num" id="cnt-todos">—</div>
+        <div class="count-lbl">Todos</div>
+      </div>
+      <div class="count-pill" onclick="filtrar('pendiente', this)">
+        <div class="count-num" id="cnt-pendiente">—</div>
+        <div class="count-lbl">Pendientes</div>
+      </div>
+      <div class="count-pill" onclick="filtrar('en_picking', this)">
+        <div class="count-num" id="cnt-picking">—</div>
+        <div class="count-lbl">En picking</div>
+      </div>
+      <div class="count-pill" onclick="filtrar('listo', this)">
+        <div class="count-num" id="cnt-listo">—</div>
+        <div class="count-lbl">Listos</div>
+      </div>
+    </div>
+
+    <div class="pedidos-lista" id="pedidos-lista">
+      <div class="loader">Cargando pedidos…</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     VISTA 2: PICKING DE UN PEDIDO
+══════════════════════════════════════════════ -->
+<div id="vista-picking">
+  <div class="contenedor">
+
+    <div class="pick-header">
+      <div class="pick-top">
+        <div class="pick-folio"><small>Pedido </small><span id="pk-folio">#—</span></div>
+        <span class="badge" id="pk-badge">…</span>
+      </div>
+      <div class="pick-datos">
+        <div class="pick-dato">👤 <strong id="pk-cliente">—</strong></div>
+        <div class="pick-dato">📅 <strong id="pk-fecha">—</strong></div>
+        <div class="pick-dato">📦 <strong id="pk-items">—</strong></div>
+        <div class="pick-dato">💰 <strong id="pk-total">—</strong></div>
+      </div>
+      <div class="progreso-wrap">
+        <div class="progreso-bar" id="pk-barra" style="width:0%"></div>
+      </div>
+      <div class="progreso-txt" id="pk-prog-txt">0 / 0 recogidos</div>
+    </div>
+
+    <div id="pk-banner-listo" class="banner-listo" style="display:none">
+      ✅ Este pedido ya fue liberado y está listo para entregar
+    </div>
+
+    <div class="items-lbl">Ítems a recoger</div>
+    <div class="items-lista" id="pk-items-lista"></div>
+
+    <div class="totales-card" id="pk-totales"></div>
+  </div>
+
+  <div class="acciones">
+    <button class="btn btn-back" onclick="volverALista()">← Volver</button>
+    <button class="btn btn-print" onclick="window.print()">🖨️ Imprimir</button>
+    <button class="btn btn-liberar" id="btn-liberar" onclick="liberarPedido()">✅ Liberar pedido</button>
+  </div>
+</div>
+
+<script>
+// ══ ESTADO GLOBAL ════════════════════════════════════════════
+let pedidos = [];
+let filtroActivo = 'todos';
+let pedidoActual = null;
+let recogidos = 0;
+
+// ══ INIT ═════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', cargarPedidos);
+
+// ══ LISTA DE PEDIDOS ═════════════════════════════════════════
+async function cargarPedidos() {
+  const lista = document.getElementById('pedidos-lista');
+  lista.innerHTML = '<div class="loader">Cargando pedidos…</div>';
+  try {
+    const r = await fetch('/api/logistica/pedidos');
+    const data = await r.json();
+    if (!data.ok) throw new Error(data.error);
+    pedidos = data.pedidos;
+    renderLista();
+  } catch (e) {
+    lista.innerHTML = `<div class="empty-msg"><div class="icono">⚠️</div><h3>Error al cargar</h3><p>${e.message}</p></div>`;
+  }
+}
+
+function renderLista() {
+  // Contadores
+  const tot = pedidos.length;
+  const pend = pedidos.filter(p => p.estado_logistica === 'pendiente').length;
+  const pick = pedidos.filter(p => p.estado_logistica === 'en_picking').length;
+  const list = pedidos.filter(p => p.estado_logistica === 'listo').length;
+  document.getElementById('cnt-todos').textContent = tot;
+  document.getElementById('cnt-pendiente').textContent = pend;
+  document.getElementById('cnt-picking').textContent = pick;
+  document.getElementById('cnt-listo').textContent = list;
+
+  // Filtrado
+  const filtrados = filtroActivo === 'todos'
+    ? pedidos
+    : pedidos.filter(p => p.estado_logistica === filtroActivo);
+
+  const lista = document.getElementById('pedidos-lista');
+
+  if (filtrados.length === 0) {
+    lista.innerHTML = `<div class="empty-msg">
+      <div class="icono">📭</div>
+      <h3>Sin pedidos</h3>
+      <p>${filtroActivo === 'todos' ? 'Aún no hay ventas registradas.' : 'No hay pedidos con ese estado.'}</p>
+    </div>`;
+    return;
+  }
+
+  lista.innerHTML = filtrados.map(p => {
+    const fecha = p.fecha ? p.fecha.substring(0, 10) : '—';
+    const total = '$' + Number(p.total_pedido).toLocaleString('es-CO', {maximumFractionDigits: 0});
+    const cliente = p.cliente || 'Sin cliente';
+    const etiquetas = { pendiente: 'Pendiente', en_picking: 'En picking', listo: 'Listo ✅' };
+    return `<div class="pedido-card" onclick="abrirPedido(${p.folio})">
+      <div class="pedido-folio">#${p.folio}</div>
+      <div class="pedido-info">
+        <div class="pedido-cliente">${cliente}</div>
+        <div class="pedido-meta">
+          <span>📅 ${fecha}</span>
+          <span>📦 ${p.num_items} ítem${p.num_items != 1 ? 's' : ''}</span>
+          <span>💰 ${total}</span>
+        </div>
+      </div>
+      <span class="badge badge-${p.estado_logistica}">${etiquetas[p.estado_logistica] || p.estado_logistica}</span>
+      <span class="pedido-arrow">›</span>
+    </div>`;
+  }).join('');
+}
+
+function filtrar(estado, pill) {
+  filtroActivo = estado;
+  document.querySelectorAll('.count-pill').forEach(p => p.classList.remove('activo'));
+  pill.classList.add('activo');
+  renderLista();
+}
+
+// ══ VISTA PICKING ═════════════════════════════════════════════
+async function abrirPedido(folio) {
+  document.getElementById('vista-lista').style.display = 'none';
+  document.getElementById('vista-picking').style.display = 'block';
+  document.getElementById('pk-items-lista').innerHTML = '<div class="loader">Cargando pedido…</div>';
+
+  try {
+    const r = await fetch(`/api/logistica/pedido/${folio}`);
+    const data = await r.json();
+    if (!data.ok) throw new Error(data.error);
+    pedidoActual = data;
+    recogidos = data.estado === 'listo' ? data.items.length : 0;
+    renderPicking();
+  } catch (e) {
+    document.getElementById('pk-items-lista').innerHTML =
+      `<div class="empty-msg"><div class="icono">⚠️</div><h3>Error</h3><p>${e.message}</p></div>`;
+  }
+}
+
+function renderPicking() {
+  const p = pedidoActual;
+  const yaListo = p.estado === 'listo';
+
+  document.getElementById('pk-folio').textContent = '#' + p.folio;
+  document.getElementById('pk-cliente').textContent = p.cliente || 'Sin cliente';
+  document.getElementById('pk-fecha').textContent = (p.fecha || '').substring(0, 10);
+  document.getElementById('pk-items').textContent = `${p.items.length} ítem${p.items.length !== 1 ? 's' : ''}`;
+  document.getElementById('pk-total').textContent = '$' + Number(p.total_pedido).toLocaleString('es-CO', {maximumFractionDigits: 0});
+
+  const badge = document.getElementById('pk-badge');
+  const etiquetas = { pendiente: 'Pendiente', en_picking: '🔄 En picking', listo: '✅ Listo' };
+  badge.textContent = etiquetas[p.estado] || p.estado;
+  badge.className = `badge badge-${p.estado}`;
+
+  document.getElementById('pk-banner-listo').style.display = yaListo ? 'block' : 'none';
+
+  const btnLiberar = document.getElementById('btn-liberar');
+  btnLiberar.disabled = yaListo;
+  btnLiberar.textContent = yaListo ? '✅ Ya liberado' : '✅ Liberar pedido';
+
+  // Items
+  const lista = document.getElementById('pk-items-lista');
+  lista.innerHTML = p.items.map((item, idx) => {
+    const recogidoClass = yaListo ? 'recogido' : '';
+    const checkChar = yaListo ? '✓' : '';
+    const ubiClass = item.ubicacion ? '' : 'sin';
+    const ubiTxt = item.ubicacion || 'Sin ubicación';
+    const esRecarga = item.es_recarga ? '<span>♻️ Recarga</span>' : '';
+    const precio = '$' + Number(item.precio_unit).toLocaleString('es-CO', {maximumFractionDigits: 0});
+    return `<div class="item-card ${recogidoClass}" onclick="toggleItem(this, ${idx})" data-idx="${idx}">
+      <div class="item-chk">${checkChar}</div>
+      <div class="item-info">
+        <div class="item-nombre">${item.nombre}</div>
+        <div class="item-det">
+          <span>🧴 ${item.tamano}ML</span>
+          <span>✕ ${item.cantidad}</span>
+          ${esRecarga}
+          <span>💵 ${precio}</span>
+        </div>
+      </div>
+      <div class="item-ubi ${ubiClass}">${ubiTxt}</div>
+    </div>`;
+  }).join('');
+
+  // Totales
+  const totalUnidades = p.items.reduce((s, i) => s + i.cantidad, 0);
+  document.getElementById('pk-totales').innerHTML = `
+    <div class="tot-item"><div class="tot-val">${p.items.length}</div><div class="tot-lbl">Ítems</div></div>
+    <div class="tot-item"><div class="tot-val">${totalUnidades}</div><div class="tot-lbl">Unidades</div></div>
+    <div class="tot-item"><div class="tot-val">$${Number(p.total_pedido).toLocaleString('es-CO',{maximumFractionDigits:0})}</div><div class="tot-lbl">Total</div></div>
+  `;
+
+  actualizarProgreso();
+}
+
+function toggleItem(card, idx) {
+  if (pedidoActual?.estado === 'listo') return;
+  const chk = card.querySelector('.item-chk');
+  if (card.classList.contains('recogido')) {
+    card.classList.remove('recogido');
+    chk.textContent = '';
+    recogidos--;
+  } else {
+    card.classList.add('recogido');
+    chk.textContent = '✓';
+    recogidos++;
+  }
+  actualizarProgreso();
+}
+
+function actualizarProgreso() {
+  const total = pedidoActual?.items?.length || 0;
+  const pct = total > 0 ? (recogidos / total * 100) : 0;
+  document.getElementById('pk-barra').style.width = pct + '%';
+  document.getElementById('pk-prog-txt').textContent = `${recogidos} / ${total} recogidos`;
+}
+
+async function liberarPedido() {
+  if (!pedidoActual) return;
+  const btn = document.getElementById('btn-liberar');
+  btn.disabled = true;
+  btn.textContent = '⏳ Liberando…';
+  try {
+    const r = await fetch(`/api/logistica/liberar/${pedidoActual.folio}`, { method: 'POST' });
+    const data = await r.json();
+    if (!data.ok) throw new Error(data.error);
+    pedidoActual.estado = 'listo';
+    recogidos = pedidoActual.items.length;
+    renderPicking();
+    // Actualizar el pedido en la lista local
+    const idx = pedidos.findIndex(p => p.folio === pedidoActual.folio);
+    if (idx >= 0) pedidos[idx].estado_logistica = 'listo';
+  } catch (e) {
+    alert('Error al liberar: ' + e.message);
+    btn.disabled = false;
+    btn.textContent = '✅ Liberar pedido';
+  }
+}
+
+function volverALista() {
+  pedidoActual = null;
+  recogidos = 0;
+  document.getElementById('vista-picking').style.display = 'none';
+  document.getElementById('vista-lista').style.display = 'block';
+  renderLista(); // refresca por si cambió algún estado
+}
+</script>
+
+</body>
+</html>
