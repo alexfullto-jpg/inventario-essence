@@ -10,9 +10,6 @@ import db
 
 app = Flask(__name__)
 
-# Cuando se ejecuta en la nube, la aplicación exige una contraseña antes de
-# mostrar cualquier dato. Railway define RAILWAY_ENVIRONMENT automáticamente;
-# APP_DATA_DIR también activa este modo para evitar publicar datos por error.
 IS_CLOUD = bool(os.environ.get("RAILWAY_ENVIRONMENT") or os.environ.get("APP_DATA_DIR"))
 APP_USERNAME = os.environ.get("APP_USERNAME", "admin")
 APP_PASSWORD = os.environ.get("APP_PASSWORD", "")
@@ -73,8 +70,6 @@ def get_config(conn):
     d = row_to_dict(row)
     d["cuentas"] = json.loads(d.pop("cuentas_json") or "[]")
     saldos_iniciales = json.loads(d.pop("saldos_iniciales_json") or "{}")
-    # Asegura que cada cuenta configurada tenga una entrada (0 por defecto)
-    # aunque todavía no se le haya definido un saldo inicial.
     for c in d["cuentas"]:
         saldos_iniciales.setdefault(c, 0)
     d["saldosIniciales"] = saldos_iniciales
@@ -193,8 +188,6 @@ def api_config_update():
             fields.append("cuentas_json = ?")
             values.append(json.dumps(data["cuentas"]))
         if "saldosIniciales" in data and isinstance(data["saldosIniciales"], dict):
-            # Se fusiona con lo que ya había guardado, para no perder el saldo
-            # inicial de una cuenta que no vino en este request puntual.
             row = conn.execute("SELECT saldos_iniciales_json FROM config WHERE id = 1").fetchone()
             actuales = json.loads((row["saldos_iniciales_json"] if row else None) or "{}")
             for k, v in data["saldosIniciales"].items():
@@ -283,7 +276,7 @@ def _normalize_header(s):
     import unicodedata
     s = str(s or "")
     s = unicodedata.normalize("NFD", s)
-    s = "".join(ch for ch in s if unicodedata.category(ch) != "Mn")  # strip accents
+    s = "".join(ch for ch in s if unicodedata.category(ch) != "Mn")
     return s.strip().lower()
 
 
@@ -296,15 +289,12 @@ def _find_col(headers, candidates):
 
 @app.route("/api/fragancia/import-excel", methods=["POST"])
 def api_fragancia_import_excel():
-    """Bulk-updates stock_gr, cost_per_gr and ubicacion from a spreadsheet the
-    person already has (matched by Código). Empty cells are left untouched,
-    any value present replaces the current one, as requested."""
     file = request.files.get("file")
     if not file or not file.filename:
         return error_response("No se recibió ningún archivo.")
 
     filename = file.filename.lower()
-    rows = []  # list of dicts keyed by normalized header name -> raw cell value
+    rows = []
     try:
         if filename.endswith(".csv"):
             import csv
@@ -480,7 +470,6 @@ def api_venta_create():
         config = get_config(conn)
         frag_percent = config["frag_percent"]
 
-        # 1) Validate every line item and aggregate consumption
         frag_needed = {}
         alc_needed = 0.0
         frasco_needed = {"frasco_f10": 0, "frasco_f30": 0, "frasco_f50": 0}
@@ -521,7 +510,6 @@ def api_venta_create():
                 talla = fk.replace("frasco_f", "")
                 return error_response(f"No hay suficientes frascos de {talla}ML para completar el pedido.")
 
-        # 2) Commit: deduct inventory and insert one venta row per line item, sharing the folio
         folio = config["next_folio"]
         nuevas_ventas = []
         for p in prepared:
@@ -554,7 +542,6 @@ def api_venta_create():
         conn.execute("UPDATE config SET alcohol_stock_gr = alcohol_stock_gr - ? WHERE id = 1", (alc_needed,))
         conn.execute("UPDATE config SET next_folio = next_folio + 1 WHERE id = 1")
 
-        # 3) Factura (siempre se crea; si no es fiado queda registrada como ya pagada)
         total_pedido = sum(p["total"] for p in prepared)
         factura_id = db.new_id()
         conn.execute(
@@ -568,7 +555,6 @@ def api_venta_create():
                 (abono_id, factura_id, fecha, total_pedido, cuenta, "Pago completo al momento de la venta"),
             )
 
-        # 4) Save/update client
         if cliente:
             existing_c = conn.execute("SELECT * FROM clientes WHERE nombre = ?", (cliente,)).fetchone()
             if existing_c:
@@ -610,12 +596,152 @@ def api_venta_delete(venta_id):
         quedan = conn.execute("SELECT COUNT(*) AS c FROM ventas WHERE folio = ?", (v["folio"],)).fetchone()["c"]
         if quedan == 0:
             conn.execute("DELETE FROM facturas WHERE folio = ?", (v["folio"],))
+        else:
+            # Recalcular total de la factura al quitar un ítem
+            conn.execute(
+                "UPDATE facturas SET total = (SELECT COALESCE(SUM(total),0) FROM ventas WHERE folio = ?) WHERE folio = ?",
+                (v["folio"], v["folio"])
+            )
 
         conn.commit()
         return jsonify({"ok": True})
     except Exception as e:
         conn.rollback()
         return error_response(f"No se pudo eliminar la venta: {e}", 500)
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Editar pedido existente: agregar un ítem a un folio ya guardado
+# ---------------------------------------------------------------------------
+
+@app.route("/api/venta/agregar-item", methods=["POST"])
+def api_venta_agregar_item():
+    """Agrega un producto nuevo a un pedido/folio ya existente.
+    Valida stock, descuenta inventario y actualiza el total de la factura."""
+    data = request.get_json(force=True) or {}
+
+    folio = data.get("folio")
+    if not folio:
+        return error_response("Falta el número de folio.")
+
+    codigo        = str(data.get("codigo") or "").strip()
+    tamano        = int(data.get("tamano") or 0)
+    cantidad      = int(data.get("cantidad") or 0)
+    precio_unit   = float(data.get("precioUnit") or 0)
+    precio_original = float(data.get("precioOriginal") or precio_unit)
+    descuento_pct = max(0.0, min(100.0, float(data.get("descuentoPct") or 0)))
+    es_recarga    = bool(data.get("esRecarga"))
+
+    if not codigo:
+        return error_response("Falta la referencia de la fragancia.")
+    if tamano not in (10, 30, 50):
+        return error_response("Tamaño inválido. Debe ser 10, 30 o 50.")
+    if cantidad <= 0:
+        return error_response("La cantidad debe ser mayor a 0.")
+    if precio_unit <= 0:
+        return error_response("El precio debe ser mayor a 0.")
+
+    conn = db.get_conn()
+    try:
+        factura = conn.execute(
+            "SELECT * FROM facturas WHERE folio = ?", (folio,)
+        ).fetchone()
+        if not factura:
+            return error_response(f"No existe ningún pedido con el folio {folio}.", 404)
+        factura = row_to_dict(factura)
+
+        config       = get_config(conn)
+        frag_percent = config["frag_percent"]
+
+        f = get_fragancia(conn, codigo)
+        if not f:
+            return error_response(f"La fragancia con referencia {codigo} no existe.")
+
+        frag_gr, alc_gr = recipe_for(tamano, frag_percent)
+        frag_needed = frag_gr * cantidad
+        alc_needed  = alc_gr * cantidad
+
+        if f["stock_gr"] < frag_needed - 1e-9:
+            return error_response(
+                f"Stock insuficiente de {f['nombre']}. "
+                f"Disponible: {f['stock_gr']:.1f} g — necesarios: {frag_needed:.1f} g."
+            )
+        if config["alcohol_stock_gr"] < alc_needed - 1e-9:
+            return error_response("No hay suficiente alcohol para este ítem.")
+
+        fk = frasco_key(tamano)
+        if not es_recarga and config[f"{fk}_stock"] < cantidad:
+            return error_response(
+                f"No hay suficientes frascos de {tamano}ML. "
+                f"Disponibles: {config[f'{fk}_stock']}."
+            )
+
+        total_item = precio_unit * cantidad
+
+        # Descontar inventario
+        new_frag_stock = round((f["stock_gr"] - frag_needed) * 1000) / 1000
+        conn.execute(
+            "UPDATE fragancias SET stock_gr = ? WHERE codigo = ?",
+            (new_frag_stock, f["codigo"])
+        )
+        conn.execute(
+            "UPDATE config SET alcohol_stock_gr = alcohol_stock_gr - ? WHERE id = 1",
+            (alc_needed,)
+        )
+        if not es_recarga:
+            conn.execute(
+                f"UPDATE config SET {fk}_stock = {fk}_stock - ? WHERE id = 1",
+                (cantidad,)
+            )
+
+        # Insertar la nueva fila de venta en el mismo folio
+        venta_id    = db.new_id()
+        fecha       = factura["fecha"]
+        cliente     = factura["cliente"]
+        cliente_tel = factura["cliente_tel"]
+
+        conn.execute(
+            "INSERT INTO ventas (id, folio, fecha, codigo, nombre, tamano, cantidad, "
+            "precio_unit, total, frag_used_gr, alcohol_used_gr, cliente, cliente_tel, "
+            "es_recarga, frag_cost_per_gr, alcohol_cost_per_gr, frasco_cost, "
+            "precio_original, descuento_pct) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (
+                venta_id, folio, fecha, f["codigo"], f["nombre"], tamano, cantidad,
+                precio_unit, total_item, frag_gr * cantidad, alc_gr * cantidad,
+                cliente, cliente_tel, 1 if es_recarga else 0,
+                f["cost_per_gr"], config["alcohol_cost_per_gr"],
+                0 if es_recarga else config[f"{fk}_cost"],
+                precio_original, descuento_pct,
+            ),
+        )
+
+        # Actualizar total de la factura sumando el ítem nuevo
+        conn.execute(
+            "UPDATE facturas SET total = total + ? WHERE folio = ?",
+            (total_item, folio)
+        )
+
+        conn.commit()
+
+        return jsonify({
+            "ok": True,
+            "venta": {
+                "id": venta_id, "folio": folio, "fecha": fecha,
+                "codigo": f["codigo"], "nombre": f["nombre"],
+                "tamano": tamano, "cantidad": cantidad,
+                "precioUnit": precio_unit, "total": total_item,
+                "esRecarga": es_recarga,
+                "precioOriginal": precio_original,
+                "descuentoPct": descuento_pct,
+            }
+        })
+
+    except Exception as e:
+        conn.rollback()
+        return error_response(f"No se pudo agregar el producto: {e}", 500)
     finally:
         conn.close()
 
@@ -787,10 +913,6 @@ def api_abono_create():
 
 @app.route("/api/factura/<factura_id>", methods=["PATCH"])
 def api_factura_update(factura_id):
-    """Corrige el nombre/teléfono del cliente de una factura ya registrada.
-    Mantiene sincronizados los registros de ventas con ese mismo folio y la
-    lista de clientes, para que el historial y las estadísticas por cliente
-    queden consistentes."""
     data = request.get_json(force=True) or {}
     conn = db.get_conn()
     try:
@@ -831,8 +953,6 @@ def api_factura_update(factura_id):
 
 @app.route("/api/abono/<abono_id>", methods=["PATCH"])
 def api_abono_update(abono_id):
-    """Corrige un pago/abono ya registrado (por ejemplo, la cuenta a la que
-    realmente llegó el dinero, el monto, la fecha o la nota)."""
     data = request.get_json(force=True) or {}
     conn = db.get_conn()
     try:
@@ -875,9 +995,6 @@ def api_abono_update(abono_id):
 
 @app.route("/api/abono/<abono_id>", methods=["DELETE"])
 def api_abono_delete(abono_id):
-    """Elimina un pago registrado por error (por ejemplo, una venta que quedó
-    marcada como pagada sin haberlo estado). La factura recupera el saldo
-    pendiente correspondiente."""
     conn = db.get_conn()
     try:
         a = conn.execute("SELECT * FROM abonos WHERE id = ?", (abono_id,)).fetchone()
@@ -1063,10 +1180,6 @@ def api_export_excel():
 # Logística: preparación y despacho de pedidos
 # ---------------------------------------------------------------------------
 
-# ── MIGRACIÓN (ejecutar UNA sola vez) ──────────────────────
-# Visita: https://alexfullto.pythonanywhere.com/admin/migrar-logistica
-# Después puedes dejar la ruta; si la vuelves a visitar no pasa nada.
-
 @app.route("/admin/migrar-logistica")
 def admin_migrar_logistica():
     conn = db.get_conn()
@@ -1083,13 +1196,11 @@ def admin_migrar_logistica():
     return msg
 
 
-# ── PÁGINA logistica.html ───────────────────────────────────
 @app.route("/logistica")
 def logistica_page():
     return render_template("logistica.html")
 
 
-# ── API: lista de pedidos agrupados por folio ───────────────
 @app.route("/api/logistica/pedidos")
 def api_logistica_pedidos():
     conn = db.get_conn()
@@ -1113,12 +1224,10 @@ def api_logistica_pedidos():
         conn.close()
 
 
-# ── API: detalle de un pedido (ítems con ubicación) ─────────
 @app.route("/api/logistica/pedido/<int:folio>")
 def api_logistica_pedido(folio):
     conn = db.get_conn()
     try:
-        # Marcar en_picking si aún está pendiente
         conn.execute(
             "UPDATE ventas SET estado_logistica = 'en_picking' "
             "WHERE folio = ? AND estado_logistica = 'pendiente'",
@@ -1164,7 +1273,6 @@ def api_logistica_pedido(folio):
         conn.close()
 
 
-# ── API: liberar pedido ─────────────────────────────────────
 @app.route("/api/logistica/liberar/<int:folio>", methods=["POST"])
 def api_logistica_liberar(folio):
     conn = db.get_conn()
@@ -1204,7 +1312,7 @@ if __name__ == "__main__":
         _signal.signal(_signal.SIGTERM, _cleanup_and_exit)
         _signal.signal(_signal.SIGINT, _cleanup_and_exit)
     except Exception:
-        pass  # not all signals are available on every platform
+        pass
 
     lan_ip = db.get_lan_ip()
     print("=" * 60)
