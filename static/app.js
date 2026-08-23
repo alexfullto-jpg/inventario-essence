@@ -1337,6 +1337,7 @@ function renderHistorial() {
         <td>${escapeHtml(it.nombre)} — ${it.tamano}ML x${it.cantidad}${it.es_recarga ? ' 🔄' : ''}${it.cliente ? ' · ' + escapeHtml(it.cliente) : ''}</td>
         <td>${fmtCOP(it.total)}</td>
         <td style="display:flex; gap:6px;">
+          <button class="btn small" data-editpedido="${it.folio}" title="Editar pedido (agregar/quitar productos)">✏️</button>
           <button class="btn small" data-resend-id="${it.id}" title="Reenviar ticket por WhatsApp">📤</button>
           <button class="btn small danger" data-id="${it.id}" data-tipo="venta">Eliminar</button>
         </td>
@@ -1351,6 +1352,8 @@ function renderHistorial() {
   }).join('');
 }
 document.getElementById('historialTbody').addEventListener('click', (e) => {
+  const editBtn = e.target.closest('button[data-editpedido]');
+  if (editBtn) { abrirEditarPedido(editBtn.getAttribute('data-editpedido')); return; }
   const resendBtn = e.target.closest('button[data-resend-id]');
   if (resendBtn) { resendTicketForVenta(resendBtn.getAttribute('data-resend-id')); return; }
   const btn = e.target.closest('button[data-id]');
@@ -1376,6 +1379,107 @@ document.getElementById('confirmDeleteBtn').addEventListener('click', () => runA
   document.getElementById('deleteOverlay').classList.remove('open');
   showToast(tipo === 'abono' ? 'Pago eliminado, la factura quedó pendiente' : 'Movimiento eliminado e inventario revertido');
 }));
+
+// ---------------------------------------------------------------------------
+// EDITAR PEDIDO — agregar / quitar productos de un pedido (folio) ya guardado
+// ---------------------------------------------------------------------------
+
+let editarPedidoFolio = null;
+
+function abrirEditarPedido(folio) {
+  editarPedidoFolio = folio;
+  document.getElementById('epFolioLabel').textContent = String(folio).padStart(4, '0');
+  document.getElementById('epError').textContent = '';
+
+  const sel = document.getElementById('epCodigo');
+  sel.innerHTML = '<option value="">— selecciona —</option>' +
+    [...DATA.fragancias].sort((a, b) => a.nombre.localeCompare(b.nombre))
+      .map(f => `<option value="${f.codigo}">${escapeHtml(f.codigo + ' — ' + f.nombre)}</option>`).join('');
+
+  document.getElementById('epTamano').value = '10';
+  document.getElementById('epCantidad').value = '1';
+  document.getElementById('epPrecio').value = '';
+  document.getElementById('epEsRecarga').checked = false;
+
+  _epRenderActual(folio);
+  document.getElementById('editarPedidoOverlay').classList.add('open');
+}
+
+function _epRenderActual(folio) {
+  const tbody = document.getElementById('epActualBody');
+  const items = DATA.ventas.filter(v => String(v.folio) === String(folio));
+
+  if (!items.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="hint" style="text-align:center;">Sin productos en este pedido.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = items.map(v => `
+    <tr>
+      <td>${escapeHtml(v.nombre)}${v.es_recarga ? ' <span class="hint" style="margin:0;">(Recarga)</span>' : ''}</td>
+      <td>${v.tamano} ML</td>
+      <td>${v.cantidad}</td>
+      <td>${fmtCOP(v.precio_unit)}</td>
+      <td>${fmtCOP(v.total)}</td>
+      <td><button class="btn small danger" data-ep-del="${v.id}" title="Quitar este producto del pedido">🗑️</button></td>
+    </tr>`).join('');
+}
+
+document.getElementById('epCerrarBtn').addEventListener('click', () => {
+  editarPedidoFolio = null;
+  document.getElementById('editarPedidoOverlay').classList.remove('open');
+});
+
+document.getElementById('epActualBody').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-ep-del]');
+  if (!btn) return;
+  if (!confirm('¿Quitar este producto del pedido? El stock se devolverá automáticamente.')) return;
+  const ventaId = btn.getAttribute('data-ep-del');
+  const folio = editarPedidoFolio;
+  runAction(async () => {
+    await api('/api/venta/' + ventaId, { method: 'DELETE' });
+    showToast('Producto quitado del pedido');
+  }).then(() => { if (folio != null) _epRenderActual(folio); });
+});
+
+document.getElementById('epBtnAgregar').addEventListener('click', () => {
+  const folio    = editarPedidoFolio;
+  const codigo   = document.getElementById('epCodigo').value.trim();
+  const tamano   = Number(document.getElementById('epTamano').value);
+  const cantidad = Number(document.getElementById('epCantidad').value) || 0;
+  const precio   = Number(document.getElementById('epPrecio').value) || 0;
+  const recarga  = document.getElementById('epEsRecarga').checked;
+  const errDiv   = document.getElementById('epError');
+  errDiv.textContent = '';
+
+  if (!codigo)          { errDiv.textContent = '⚠️ Selecciona una fragancia.'; return; }
+  if (!(cantidad > 0))  { errDiv.textContent = '⚠️ La cantidad debe ser al menos 1.'; return; }
+  if (!(precio > 0))    { errDiv.textContent = '⚠️ Ingresa un precio mayor a 0.'; return; }
+
+  runAction(async () => {
+    await api('/api/venta/agregar-item', {
+      method: 'POST',
+      body: JSON.stringify({
+        folio: folio,
+        codigo: codigo,
+        tamano: tamano,
+        cantidad: cantidad,
+        precioUnit: precio,
+        precioOriginal: precio,
+        descuentoPct: 0,
+        esRecarga: recarga,
+      }),
+    });
+    showToast('Producto agregado al pedido');
+  }).then(() => {
+    if (folio == null) return;
+    document.getElementById('epCodigo').value = '';
+    document.getElementById('epCantidad').value = '1';
+    document.getElementById('epPrecio').value = '';
+    document.getElementById('epEsRecarga').checked = false;
+    _epRenderActual(folio);
+  });
+});
 
 // ---------------------------------------------------------------------------
 // BACKUP / EXPORT / IMPORT FRAGANCIAS
