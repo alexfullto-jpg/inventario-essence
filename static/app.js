@@ -5,6 +5,7 @@ let historialFilter = 'todos';
 let cuentasFilter = 'pendientes';
 let deleteTarget = null;
 let abonoTarget = null;
+let inventoryStockFilter = 'todos'; // ← NUEVO filtro de stock
 
 // ---------------------------------------------------------------------------
 // Low-level helpers
@@ -420,11 +421,28 @@ document.getElementById('saveRecargaBtn').addEventListener('click', () => runAct
   showToast('Precios de recarga actualizados');
 }));
 
-function estadoTag(f) {
+// ---------------------------------------------------------------------------
+// FILTRO DE STOCK — lógica principal
+// ---------------------------------------------------------------------------
+
+/**
+ * Clasifica una fragancia según su nivel de stock.
+ * - "bajo":  no alcanza para ni 1 frasco de 30ML
+ * - "medio": alcanza para 1–2 frascos de 30ML (zona de precaución)
+ * - "ok":    alcanza para 3 o más frascos de 30ML
+ */
+function stockNivel(f) {
   const r30 = recipeFor(30);
   const units = f.stock_gr / r30.fragGr;
-  if (units < 1) return '<span class="tag low">Bajo</span>';
-  if (units < 3) return '<span class="tag mid">Medio</span>';
+  if (units < 1) return 'bajo';
+  if (units < 3) return 'medio';
+  return 'ok';
+}
+
+function estadoTag(f) {
+  const nivel = stockNivel(f);
+  if (nivel === 'bajo')  return '<span class="tag low">Bajo</span>';
+  if (nivel === 'medio') return '<span class="tag mid">Medio</span>';
   return '<span class="tag ok">Bien</span>';
 }
 function alcanzaPara(f) {
@@ -432,10 +450,67 @@ function alcanzaPara(f) {
   return `~${Math.floor(f.stock_gr / r30.fragGr)} x 30ML`;
 }
 
+/**
+ * Construye el texto del pedido para copiar/WhatsApp.
+ */
+function buildPedidoText(fragancias) {
+  const lines = [];
+  lines.push(`📦 *Pedido de reposición — ${DATA.config.business_name || 'Inventario'}*`);
+  lines.push(`Fecha: ${todayStr()}`);
+  lines.push('');
+  lines.push('Referencias con stock bajo:');
+  fragancias.forEach((f, i) => {
+    const r30 = recipeFor(30);
+    const cant30 = Math.floor(f.stock_gr / r30.fragGr);
+    lines.push(`${i + 1}. ${f.nombre} (Ref. ${f.codigo}) — Stock actual: ${fmtGr(f.stock_gr)} (~${cant30} x 30ML)`);
+  });
+  lines.push('');
+  lines.push('¡Por favor confirmar disponibilidad y precio! 🙏');
+  return lines.join('\n');
+}
+
+function renderPedidoRapidoPanel(fragancias) {
+  const panel = document.getElementById('pedidoRapidoPanel');
+  const countEl = document.getElementById('pedidoRapidoCount');
+  if (!panel) return;
+
+  if (inventoryStockFilter === 'bajo' && fragancias.length > 0) {
+    panel.style.display = '';
+    countEl.textContent = `${fragancias.length} referencia${fragancias.length !== 1 ? 's' : ''} para pedir`;
+  } else {
+    panel.style.display = 'none';
+  }
+}
+
 function renderInventoryTable() {
   const q = (document.getElementById('inventorySearch').value || '').trim().toLowerCase();
   document.getElementById('fragCount').textContent = DATA.fragancias.length;
-  const rows = DATA.fragancias.filter(f => !q || f.nombre.toLowerCase().includes(q) || String(f.codigo).includes(q));
+
+  // Aplicar filtro de stock primero, luego búsqueda de texto
+  let rows = DATA.fragancias.filter(f => {
+    if (inventoryStockFilter !== 'todos' && stockNivel(f) !== inventoryStockFilter) return false;
+    if (q && !f.nombre.toLowerCase().includes(q) && !String(f.codigo).includes(q)) return false;
+    return true;
+  });
+
+  // Ordenar: en filtro "bajo" se muestra de menor a mayor stock
+  if (inventoryStockFilter === 'bajo') {
+    rows = rows.sort((a, b) => a.stock_gr - b.stock_gr);
+  }
+
+  // Panel de pedido rápido (solo en filtro "bajo")
+  renderPedidoRapidoPanel(rows);
+
+  if (rows.length === 0) {
+    document.getElementById('inventoryTbody').innerHTML =
+      `<tr><td colspan="8"><div class="empty-note">
+        ${inventoryStockFilter === 'bajo' ? '🎉 ¡Excelente! Ninguna fragancia está en stock bajo.' :
+          inventoryStockFilter === 'medio' ? 'Ninguna fragancia está en nivel medio.' :
+          'No se encontraron referencias con ese filtro.'}
+      </div></td></tr>`;
+    return;
+  }
+
   document.getElementById('inventoryTbody').innerHTML = rows.map(f => `
     <tr data-codigo="${f.codigo}">
       <td>${f.codigo}</td>
@@ -448,6 +523,39 @@ function renderInventoryTable() {
       <td>${estadoTag(f)}</td>
     </tr>`).join('');
 }
+
+// Listeners de las pills de filtro de stock
+document.addEventListener('click', (e) => {
+  const pill = e.target.closest('.pill-btn[data-stock-filter]');
+  if (!pill) return;
+  document.querySelectorAll('.pill-btn[data-stock-filter]').forEach(b => b.classList.remove('active'));
+  pill.classList.add('active');
+  inventoryStockFilter = pill.getAttribute('data-stock-filter');
+  renderInventoryTable();
+});
+
+// Copiar lista de pedido
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('#copiarPedidoBtn')) return;
+  const bajasRows = DATA.fragancias
+    .filter(f => stockNivel(f) === 'bajo')
+    .sort((a, b) => a.stock_gr - b.stock_gr);
+  const texto = buildPedidoText(bajasRows);
+  navigator.clipboard.writeText(texto)
+    .then(() => showToast('✅ Lista copiada al portapapeles'))
+    .catch(() => showToast('No se pudo copiar, inténtalo manualmente', true));
+});
+
+// Enviar pedido por WhatsApp
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('#whatsappPedidoBtn')) return;
+  const bajasRows = DATA.fragancias
+    .filter(f => stockNivel(f) === 'bajo')
+    .sort((a, b) => a.stock_gr - b.stock_gr);
+  const texto = buildPedidoText(bajasRows);
+  window.open('https://wa.me/?text=' + encodeURIComponent(texto), '_blank');
+});
+
 document.getElementById('inventorySearch').addEventListener('input', debounce(renderInventoryTable, 150));
 
 document.getElementById('inventoryTbody').addEventListener('change', (e) => runAction(async () => {
@@ -1083,7 +1191,6 @@ document.getElementById('facturasTbody').addEventListener('click', (e) => {
   if (estadoBtn) { sendEstadoCuentaFactura(estadoBtn.getAttribute('data-estadofactura')); return; }
   const editBtn = e.target.closest('button[data-editcliente]');
   if (editBtn) { openEditClienteModal(editBtn.getAttribute('data-editcliente')); return; }
-  // ← NUEVO: botón editar pedido
   const editPedidoBtn = e.target.closest('button[data-editarpedido]');
   if (editPedidoBtn) { abrirEditarPedido(editPedidoBtn.getAttribute('data-editarpedido')); return; }
 });
@@ -1333,7 +1440,6 @@ function renderHistorial() {
 document.getElementById('historialTbody').addEventListener('click', (e) => {
   const resendBtn = e.target.closest('button[data-resend-id]');
   if (resendBtn) { resendTicketForVenta(resendBtn.getAttribute('data-resend-id')); return; }
-  // ← NUEVO: botón editar pedido desde historial
   const editPedidoBtn = e.target.closest('button[data-editarpedido]');
   if (editPedidoBtn) { abrirEditarPedido(editPedidoBtn.getAttribute('data-editarpedido')); return; }
   const btn = e.target.closest('button[data-id]');
@@ -1433,7 +1539,7 @@ document.getElementById('importExcelStockFileInput').addEventListener('change', 
 });
 
 // ---------------------------------------------------------------------------
-// ✏️ EDITAR PEDIDO — agregar o quitar productos de un folio ya guardado
+// ✏️ EDITAR PEDIDO
 // ---------------------------------------------------------------------------
 
 function abrirEditarPedido(folio) {
@@ -1441,7 +1547,6 @@ function abrirEditarPedido(folio) {
   document.getElementById('epFolioLabel').textContent = folio;
   document.getElementById('epError').textContent = '';
 
-  // Llenar select de fragancias
   const sel = document.getElementById('epCodigo');
   sel.innerHTML = '<option value="">— selecciona —</option>';
   [...DATA.fragancias].sort((a, b) => a.nombre.localeCompare(b.nombre)).forEach(f => {
