@@ -54,7 +54,6 @@
 
 <!-- ================= INVENTARIO ================= -->
 <section class="tab-content" id="tab-inventario">
-
   <div class="card">
     <h3>Datos del negocio</h3>
     <div class="field-row">
@@ -63,7 +62,6 @@
     </div>
     <button class="btn small" id="saveBusinessBtn">Guardar</button>
   </div>
-
   <div class="card">
     <h3>Receta de dilución</h3>
     <div class="sub">% del volumen final que es fragancia concentrada. El resto se completa con alcohol.</div>
@@ -72,7 +70,6 @@
     </div>
     <div class="hint" id="recipePreview"></div>
   </div>
-
   <div class="two-col">
     <div class="card">
       <h3>Alcohol</h3>
@@ -83,7 +80,6 @@
       <button class="btn small" id="saveAlcoholBtn">Guardar</button>
       <div class="hint">Para agregar stock nuevo (compra), usa la pestaña "Registrar compra".</div>
     </div>
-
     <div class="card">
       <h3>Frascos vacíos</h3>
       <div class="field-row" style="grid-template-columns:repeat(3,1fr);">
@@ -100,7 +96,6 @@
       <button class="btn small" id="saveFrascosBtn">Guardar</button>
     </div>
   </div>
-
   <div class="card" style="border-color:var(--teal); background:rgba(79,123,127,0.06);">
     <h3 style="color:var(--teal);">🔄 Precios de recarga (cliente trae su propio frasco)</h3>
     <div class="field-row" style="grid-template-columns:repeat(3,1fr); max-width:400px;">
@@ -110,14 +105,12 @@
     </div>
     <button class="btn small" id="saveRecargaBtn">Guardar</button>
   </div>
-
   <div class="card" style="border-color:var(--gold); background:rgba(201,162,39,0.08);">
     <h3 style="color:var(--gold-soft);">📍 Localizador rápido de ubicación</h3>
     <div class="sub">Escribe uno o varios nombres/referencias separados por coma para ver de inmediato la ubicación física de cada fragancia.</div>
     <input type="text" class="search-input" id="locBuscarInput" placeholder="Ej: 3603, cloud, 954" style="max-width:100%;">
     <div id="locResultados"></div>
   </div>
-
   <div class="card">
     <h3>Fragancias concentradas (<span id="fragCount">0</span> referencias)</h3>
     <div class="sub">Stock actual de concentrado en gramos por referencia.</div>
@@ -129,7 +122,6 @@
       </table>
     </div>
   </div>
-
   <div class="card">
     <h3>📦 Otros productos de inventario (empaques, etiquetas, bolsas de aluminio, etc.)</h3>
     <div class="field-row" style="grid-template-columns:2fr 1fr 1fr 1fr auto;">
@@ -167,7 +159,6 @@
       </div>
     </div>
   </div>
-
   <div class="card">
     <h3>Agregar producto al pedido</h3>
     <div class="field-row">
@@ -198,7 +189,6 @@
     <button class="btn primary" id="addItemToCartBtn">+ Agregar al pedido</button>
     <div class="hint" id="addItemError" style="color:var(--danger);"></div>
   </div>
-
   <div class="card">
     <h3>Pedido actual (<span id="cartItemCount">0</span> productos)</h3>
     <div class="table-wrap">
@@ -212,14 +202,11 @@
       <span style="font-size:22px; font-weight:700; color:var(--gold-soft); font-family:'Cormorant Garamond';" id="cartGrandTotal">$0</span>
     </div>
   </div>
-
   <div class="card" style="background:rgba(201,162,39,0.06); border-color:var(--gold);">
     <div class="hint" id="ventaPreview" style="font-size:13px;"></div>
   </div>
-
   <button class="btn primary" id="registrarVentaBtn">Registrar pedido completo</button>
   <div class="hint" id="ventaError" style="color:var(--danger);"></div>
-
   <div class="card" id="ticketPanel" style="display:none; border-color:var(--ok); background:rgba(74,157,111,0.06); margin-top:18px;">
     <h3 style="color:var(--ok);">✅ Pedido registrado — Ticket #<span id="ticketFolio"></span></h3>
     <div class="hint" id="ticketPreviewText" style="white-space:pre-wrap; font-family:monospace; font-size:12.5px; background:var(--surface-2); padding:12px; border-radius:8px; line-height:1.6;"></div>
@@ -404,48 +391,63 @@
   </div>
 </div>
 
-<!-- EDITAR PEDIDO MODAL -->
-<div class="overlay" id="editarPedidoOverlay">
-  <div class="modal" style="max-width:640px;">
+<!-- ================= ✏️ EDITAR PEDIDO MODAL (NUEVO) ================= -->
+<div class="overlay" id="epOverlay">
+  <div class="modal" style="max-width:680px; width:95%;">
     <h3>✏️ Editar pedido — Folio #<span id="epFolioLabel"></span></h3>
 
-    <div class="hint" style="margin-bottom:6px;">Productos actuales</div>
-    <div class="table-wrap" style="margin-bottom:16px;">
+    <p class="hint" style="margin-bottom:10px;">Aquí podés quitar productos que sobran o agregar los que faltaron.</p>
+
+    <!-- Tabla de ítems actuales -->
+    <h4 style="margin:0 0 8px; font-size:13px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em;">Productos en este pedido</h4>
+    <div class="table-wrap" style="margin-bottom:18px;">
       <table>
-        <thead><tr><th>Fragancia</th><th>Tam.</th><th>Cant.</th><th>Precio</th><th>Total</th><th></th></tr></thead>
-        <tbody id="epActualBody"><tr><td colspan="6" class="hint" style="text-align:center;">Cargando...</td></tr></tbody>
+        <thead>
+          <tr><th>Fragancia</th><th style="text-align:center;">Tamaño</th><th style="text-align:center;">Cant.</th><th style="text-align:right;">Precio</th><th style="text-align:right;">Total</th><th style="text-align:center;">Quitar</th></tr>
+        </thead>
+        <tbody id="epActualBody"></tbody>
       </table>
     </div>
 
-    <div class="hint" style="margin-bottom:6px;">➕ Agregar producto al pedido</div>
-    <div class="field-row" style="grid-template-columns:2fr 1fr 1fr 1fr;">
-      <div class="field"><label>Fragancia</label>
+    <hr style="border-color:var(--line); margin:0 0 16px;">
+
+    <!-- Formulario agregar -->
+    <h4 style="margin:0 0 12px; font-size:13px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em;">➕ Agregar producto al pedido</h4>
+    <div class="field-row" style="grid-template-columns:2fr 1fr 1fr 1fr; gap:10px;">
+      <div class="field">
+        <label>Fragancia</label>
         <select id="epCodigo"><option value="">— selecciona —</option></select>
       </div>
-      <div class="field"><label>Tamaño</label>
+      <div class="field">
+        <label>Tamaño</label>
         <select id="epTamano">
           <option value="10">10 ML</option>
           <option value="30">30 ML</option>
           <option value="50">50 ML</option>
         </select>
       </div>
-      <div class="field"><label>Cantidad</label><input type="number" id="epCantidad" value="1" min="1" step="1"></div>
-      <div class="field"><label>Precio unit.</label><input type="number" id="epPrecio" min="0" step="100" placeholder="0"></div>
+      <div class="field">
+        <label>Cantidad</label>
+        <input type="number" id="epCantidad" value="1" min="1" step="1">
+      </div>
+      <div class="field">
+        <label>Precio unit.</label>
+        <input type="number" id="epPrecio" min="0" step="100" placeholder="0">
+      </div>
     </div>
-    <label style="display:flex; align-items:center; gap:8px; margin:10px 0; font-size:13px; cursor:pointer;">
-      <input type="checkbox" id="epEsRecarga" style="width:16px; height:16px;">
-      🔄 Recarga (cliente trae su propio frasco)
+    <label style="display:flex; align-items:center; gap:8px; margin:10px 0 4px; font-size:13px; color:var(--teal); cursor:pointer;">
+      <input type="checkbox" id="epEsRecarga" style="width:15px; height:15px; accent-color:var(--teal);">
+      🔄 Recarga (el cliente trae su propio frasco)
     </label>
+    <div id="epError" style="min-height:1.4em; color:var(--danger); font-size:13px; margin:6px 0;"></div>
 
-    <div class="hint" id="epError" style="color:var(--danger); min-height:1.2em;"></div>
-
-    <div class="modal-actions">
+    <div class="modal-actions" style="margin-top:14px;">
       <button class="btn" id="epCerrarBtn">Cerrar</button>
       <button class="btn primary" id="epBtnAgregar">➕ Agregar al pedido</button>
     </div>
   </div>
 </div>
-<!-- FIN modal editar pedido -->
+<!-- ================= FIN MODAL EDITAR PEDIDO ================= -->
 
 <!-- ================= MIS CUENTAS ================= -->
 <section class="tab-content" id="tab-caja">
@@ -489,7 +491,6 @@
       </table>
     </div>
   </div>
-
   <div class="card">
     <h3>Respaldo y exportación</h3>
     <div style="display:flex; gap:10px; flex-wrap:wrap;">
@@ -500,7 +501,6 @@
     </div>
     <div class="hint">Tu información vive en un archivo de base de datos en <code>data/inventario.db</code>, dentro de la carpeta del programa. Aun así, exporta un respaldo JSON de vez en cuando por seguridad.</div>
   </div>
-
   <div class="card">
     <h3>🔗 Importar/actualizar fragancias desde un catálogo</h3>
     <div class="hint">Sube el archivo JSON exportado desde tu catálogo de lociones para agregar o actualizar referencias (nombre, género, precios) sin tocar tu stock actual.</div>
@@ -510,7 +510,6 @@
     </div>
     <div class="hint" id="importFraganciasStatus" style="margin-top:8px;"></div>
   </div>
-
   <div class="card">
     <h3>📊 Importar gramos / costo / ubicación desde Excel</h3>
     <div class="hint">Sube tu Excel (o CSV) con el stock, costo por gramo y ubicación de tus fragancias. Se identifican por <b>Código</b> (acepta también "Referencia"/"Ref"). Columnas reconocidas: Gramos/Stock, Costo/Costo por gramo, Ubicación/Ubicacion. Las celdas vacías no modifican el dato existente; los valores que sí traigan reemplazan el actual.</div>
@@ -537,6 +536,5 @@
 <div class="toast" id="toast"></div>
 
 <script src="{{ url_for('static', filename='app.js') }}"></script>
-
 </body>
 </html>
