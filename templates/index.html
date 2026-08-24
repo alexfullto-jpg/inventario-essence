@@ -111,10 +111,35 @@
     <input type="text" class="search-input" id="locBuscarInput" placeholder="Ej: 3603, cloud, 954" style="max-width:100%;">
     <div id="locResultados"></div>
   </div>
+
+  <!-- ===== CARD FRAGANCIAS CON FILTRO DE STOCK ===== -->
   <div class="card">
     <h3>Fragancias concentradas (<span id="fragCount">0</span> referencias)</h3>
     <div class="sub">Stock actual de concentrado en gramos por referencia.</div>
-    <input type="text" class="search-input" id="inventorySearch" placeholder="Buscar referencia...">
+
+    <!-- Filtros de nivel de stock -->
+    <div class="filter-row" style="margin-bottom:10px; gap:8px; flex-wrap:wrap; align-items:center;">
+      <button class="pill-btn active" data-stock-filter="todos">Todas</button>
+      <button class="pill-btn" data-stock-filter="bajo">🔴 Stock bajo</button>
+      <button class="pill-btn" data-stock-filter="medio">🟡 Stock medio</button>
+      <button class="pill-btn" data-stock-filter="ok">🟢 Stock OK</button>
+      <input type="text" class="search-input" id="inventorySearch" placeholder="Buscar referencia..." style="margin-bottom:0; margin-left:auto; max-width:220px;">
+    </div>
+
+    <!-- Panel de pedido rápido (aparece solo en filtro "Stock bajo") -->
+    <div id="pedidoRapidoPanel" style="display:none; background:rgba(201,162,39,0.08); border:1px solid var(--gold); border-radius:10px; padding:14px 16px; margin-bottom:12px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+        <div>
+          <span style="font-weight:700; color:var(--gold-soft);">📋 Lista de pedido al proveedor</span>
+          <span class="hint" style="margin:0 0 0 8px;" id="pedidoRapidoCount"></span>
+        </div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button class="btn small primary" id="copiarPedidoBtn">📋 Copiar lista</button>
+          <button class="btn small" id="whatsappPedidoBtn">📤 Enviar por WhatsApp</button>
+        </div>
+      </div>
+    </div>
+
     <div class="table-wrap">
       <table>
         <thead><tr><th>Código</th><th>Nombre</th><th>Género</th><th>Ubicación</th><th>Stock (g)</th><th>Alcanza para</th><th>Costo/g</th><th>Estado</th></tr></thead>
@@ -122,6 +147,8 @@
       </table>
     </div>
   </div>
+  <!-- ===== FIN CARD FRAGANCIAS ===== -->
+
   <div class="card">
     <h3>📦 Otros productos de inventario (empaques, etiquetas, bolsas de aluminio, etc.)</h3>
     <div class="field-row" style="grid-template-columns:2fr 1fr 1fr 1fr auto;">
@@ -391,14 +418,11 @@
   </div>
 </div>
 
-<!-- ================= ✏️ EDITAR PEDIDO MODAL (NUEVO) ================= -->
+<!-- ================= EDITAR PEDIDO MODAL ================= -->
 <div class="overlay" id="epOverlay">
   <div class="modal" style="max-width:680px; width:95%;">
     <h3>✏️ Editar pedido — Folio #<span id="epFolioLabel"></span></h3>
-
     <p class="hint" style="margin-bottom:10px;">Aquí podés quitar productos que sobran o agregar los que faltaron.</p>
-
-    <!-- Tabla de ítems actuales -->
     <h4 style="margin:0 0 8px; font-size:13px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em;">Productos en este pedido</h4>
     <div class="table-wrap" style="margin-bottom:18px;">
       <table>
@@ -408,10 +432,7 @@
         <tbody id="epActualBody"></tbody>
       </table>
     </div>
-
     <hr style="border-color:var(--line); margin:0 0 16px;">
-
-    <!-- Formulario agregar -->
     <h4 style="margin:0 0 12px; font-size:13px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em;">➕ Agregar producto al pedido</h4>
     <div class="field-row" style="grid-template-columns:2fr 1fr 1fr 1fr; gap:10px;">
       <div class="field">
@@ -440,7 +461,6 @@
       🔄 Recarga (el cliente trae su propio frasco)
     </label>
     <div id="epError" style="min-height:1.4em; color:var(--danger); font-size:13px; margin:6px 0;"></div>
-
     <div class="modal-actions" style="margin-top:14px;">
       <button class="btn" id="epCerrarBtn">Cerrar</button>
       <button class="btn primary" id="epBtnAgregar">➕ Agregar al pedido</button>
