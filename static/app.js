@@ -1,5 +1,5 @@
-let DATA = null;           // last snapshot fetched from the server (source of truth lives in SQLite)
-let cart = [];              // in-memory draft of the order being built (not persisted until "Registrar pedido")
+let DATA = null;
+let cart = [];
 let currentTab = 'dashboard';
 let historialFilter = 'todos';
 let cuentasFilter = 'pendientes';
@@ -65,9 +65,6 @@ function showToast(msg, isError) {
   showToast._t = setTimeout(() => toast.classList.remove('show'), 2600);
 }
 
-// Wraps an async action: runs it, always refreshes data from the server afterwards
-// (success or failure), and surfaces any error as a clear toast instead of silently
-// leaving the screen out of sync with the database.
 async function runAction(fn) {
   try {
     await fn();
@@ -85,8 +82,7 @@ async function reloadAndRender() {
 }
 
 // ---------------------------------------------------------------------------
-// Recipe / cost helpers (mirrors the server's logic, for on-screen previews only —
-// the server is always the one that validates and commits stock changes)
+// Recipe / cost helpers
 // ---------------------------------------------------------------------------
 
 function recipeFor(sizeMl) {
@@ -109,7 +105,7 @@ function utilidadDeVenta(v) { return v.total - costoDeVenta(v); }
 function margenPct(total, utilidad) { return total ? (utilidad / total) * 100 : 0; }
 
 // ---------------------------------------------------------------------------
-// Fragancia search (by name or reference code)
+// Fragancia search
 // ---------------------------------------------------------------------------
 
 function fraganciaLabel(f) { return `${f.nombre} (Ref. ${f.codigo})`; }
@@ -263,8 +259,6 @@ function renderDashboard() {
 }
 
 function svgBarChart(items, opts = {}) {
-  // items: [{label, value}], draws a simple horizontal/vertical bar chart as inline SVG.
-  // No external library needed — works fully offline.
   if (items.length === 0) return '<div class="empty-note">Aún no hay datos suficientes para graficar.</div>';
   const w = 560, barGap = 10, leftPad = 4, barH = 26;
   const maxVal = Math.max(...items.map(i => i.value), 1);
@@ -726,13 +720,6 @@ function sendTicketWhatsApp(msg, clienteTel) {
   window.open(url, '_blank');
 }
 
-// ---------------------------------------------------------------------------
-// Estado de cuenta por WhatsApp (saldo pendiente del cliente, actualizado
-// con cada abono que se registre)
-// ---------------------------------------------------------------------------
-
-// Arma el mensaje de estado de cuenta para TODAS las facturas pendientes de
-// un cliente (usado desde la pestaña Clientes).
 function buildEstadoCuentaMessageCliente(nombreCliente) {
   const facturas = DATA.facturas.filter(f => f.cliente === nombreCliente && f.saldo > 0)
     .sort((a, b) => a.fecha.localeCompare(b.fecha));
@@ -758,7 +745,6 @@ function buildEstadoCuentaMessageCliente(nombreCliente) {
   return lines.join('\n');
 }
 
-// Arma el estado de cuenta de UNA sola factura (usado desde Cuentas por cobrar).
 function buildEstadoCuentaMessageFactura(factura) {
   const abonado = factura.abonos.reduce((s, a) => s + a.monto, 0);
   const lines = [];
@@ -787,9 +773,6 @@ function sendEstadoCuentaFactura(facturaId) {
   sendTicketWhatsApp(msg, factura.cliente_tel);
 }
 
-// Rebuilds and reopens the WhatsApp ticket for a past sale — used both from
-// Historial and from a client's purchase history, so it can be resent
-// anytime a client asks for it again.
 function resendTicketForVenta(ventaId) {
   const venta = DATA.ventas.find(v => v.id === ventaId);
   if (!venta) { showToast('No se encontró esa venta.', true); return; }
@@ -829,7 +812,7 @@ document.getElementById('registrarVentaBtn').addEventListener('click', () => run
   document.getElementById('ticketPanel').style.display = 'block';
   document.getElementById('sendTicketBtn').onclick = () => sendTicketWhatsApp(msg, clienteTel);
   document.getElementById('copyTicketBtn').onclick = () => navigator.clipboard.writeText(msg).then(() => showToast('Ticket copiado'));
-  try { document.getElementById('ticketPanel').scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (e) { /* cosmetic only */ }
+  try { document.getElementById('ticketPanel').scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (e) { }
 
   cart = [];
   document.getElementById('ventaCliente').value = '';
@@ -905,7 +888,7 @@ document.getElementById('registrarCompraBtn').addEventListener('click', () => ru
 }).catch(() => {}));
 
 // ---------------------------------------------------------------------------
-// GASTOS GENERALES DEL NEGOCIO
+// GASTOS GENERALES
 // ---------------------------------------------------------------------------
 
 function renderGastos() {
@@ -986,7 +969,7 @@ function renderClientes() {
   const clientes = DATA.clientes.filter(c => !q || c.nombre.toLowerCase().includes(q));
   const tbody = document.getElementById('clientesTbody');
   if (clientes.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="7"><div class="empty-note">Aún no tienes clientes guardados. Se guardan solos cuando registras una venta con nombre de cliente.</div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7"><div class="empty-note">Aún no tienes clientes guardados.</div></td></tr>';
     return;
   }
   tbody.innerHTML = clientes.map(c => {
@@ -1019,7 +1002,7 @@ document.getElementById('clientesTbody').addEventListener('click', (e) => {
       <td><button class="btn small" data-resend-id="${v.id}" title="Reenviar ticket por WhatsApp">📤</button></td></tr>`).join('')
     || '<tr><td colspan="6"><div class="empty-note">Sin compras registradas.</div></td></tr>';
   document.getElementById('clienteDetalleCard').style.display = 'block';
-  try { document.getElementById('clienteDetalleCard').scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (e) { /* cosmetic only */ }
+  try { document.getElementById('clienteDetalleCard').scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (e) { }
 });
 document.getElementById('clienteDetalleTbody').addEventListener('click', (e) => {
   const btn = e.target.closest('button[data-resend-id]');
@@ -1073,6 +1056,7 @@ function renderCuentas() {
           ${f.saldo > 0 ? `<button class="btn small primary" data-abonar="${f.id}">+ Abonar</button>` : ''}
           <button class="btn small" data-estadofactura="${f.id}" title="Enviar estado de cuenta por WhatsApp">📤 Estado</button>
           <button class="btn small" data-editcliente="${f.id}">✏️ Cliente</button>
+          <button class="btn small" data-editarpedido="${f.folio}" title="Agregar o quitar productos de este pedido">✏️ Pedido</button>
         </td>
       </tr>`;
     }).join('');
@@ -1091,14 +1075,19 @@ function renderCuentas() {
         </td>
       </tr>`).join('');
 }
+
 document.getElementById('facturasTbody').addEventListener('click', (e) => {
   const abonarBtn = e.target.closest('button[data-abonar]');
   if (abonarBtn) { openAbonoModal(abonarBtn.getAttribute('data-abonar')); return; }
   const estadoBtn = e.target.closest('button[data-estadofactura]');
   if (estadoBtn) { sendEstadoCuentaFactura(estadoBtn.getAttribute('data-estadofactura')); return; }
   const editBtn = e.target.closest('button[data-editcliente]');
-  if (editBtn) openEditClienteModal(editBtn.getAttribute('data-editcliente'));
+  if (editBtn) { openEditClienteModal(editBtn.getAttribute('data-editcliente')); return; }
+  // ← NUEVO: botón editar pedido
+  const editPedidoBtn = e.target.closest('button[data-editarpedido]');
+  if (editPedidoBtn) { abrirEditarPedido(editPedidoBtn.getAttribute('data-editarpedido')); return; }
 });
+
 document.getElementById('abonosTbody').addEventListener('click', (e) => {
   const editBtn = e.target.closest('button[data-editabono]');
   if (editBtn) { openEditAbonoModal(editBtn.getAttribute('data-editabono')); return; }
@@ -1194,12 +1183,9 @@ document.getElementById('confirmEditAbonoBtn').addEventListener('click', () => r
 }));
 
 // ---------------------------------------------------------------------------
-// MIS CUENTAS (saldo real en Efectivo / Nequi / Bancolombia / Nu, etc.)
+// MIS CUENTAS
 // ---------------------------------------------------------------------------
 
-// Saldo de una cuenta = saldo inicial que configuraste + abonos de clientes
-// recibidos en esa cuenta - compras a proveedores pagadas desde esa cuenta -
-// gastos generales pagados desde esa cuenta.
 function saldoPorCuenta(cuenta) {
   const inicial = Number((DATA.config.saldosIniciales || {})[cuenta]) || 0;
   let entradas = 0, salidasCompras = 0, salidasGastos = 0;
@@ -1216,16 +1202,13 @@ function cuentasList() {
 
 function renderCaja() {
   const cuentas = cuentasList();
-
   document.getElementById('cajaKpiGrid').innerHTML = cuentas.map(c => {
     const saldo = saldoPorCuenta(c);
     return `<div class="kpi ${saldo >= 0 ? 'ok' : 'danger'}"><div class="label">${escapeHtml(c)}</div><div class="value">${fmtCOP(saldo)}</div></div>`;
   }).join('') + `<div class="kpi ok"><div class="label">Total en todas las cuentas</div><div class="value">${fmtCOP(cuentas.reduce((s, c) => s + saldoPorCuenta(c), 0))}</div></div>`;
 
-  // Inputs de saldo inicial (solo repinta si no se está editando activamente)
   const wrap = document.getElementById('cajaSaldosInicialesWrap');
   if (document.activeElement && document.activeElement.closest('#cajaSaldosInicialesWrap')) {
-    // no repintar mientras el usuario está escribiendo, para no perder el foco
   } else {
     wrap.innerHTML = cuentas.map(c => `
       <div class="field">
@@ -1234,20 +1217,17 @@ function renderCaja() {
       </div>`).join('');
   }
 
-  // Filtro de cuenta para movimientos
   const filtroSel = document.getElementById('cajaCuentaFiltro');
   const filtroActual = filtroSel.value || 'todas';
   filtroSel.innerHTML = '<option value="todas">Todas las cuentas</option>' +
     cuentas.map(c => `<option value="${escapeAttr(c)}">${escapeHtml(c)}</option>`).join('');
   filtroSel.value = filtroActual;
-
   renderCajaMovimientos();
 }
 
 function renderCajaMovimientos() {
   const cuentaFiltro = document.getElementById('cajaCuentaFiltro').value || 'todas';
   const q = (document.getElementById('cajaSearch').value || '').trim().toLowerCase();
-
   let items = [];
   DATA.facturas.forEach(f => f.abonos.forEach(a => items.push({
     fecha: a.fecha, tipo: 'entrada', cuenta: a.cuenta,
@@ -1255,7 +1235,7 @@ function renderCajaMovimientos() {
     monto: a.monto,
   })));
   DATA.compras.forEach(c => {
-    if (!c.costo_total) return; // compras sin costo registrado no mueven dinero
+    if (!c.costo_total) return;
     items.push({
       fecha: c.fecha, tipo: 'compra', cuenta: c.cuenta,
       detalle: `Compra · ${c.nombre || c.detalle}${c.nota ? ' · ' + c.nota : ''}`,
@@ -1267,14 +1247,12 @@ function renderCajaMovimientos() {
     detalle: `Gasto · ${g.categoria}${g.descripcion ? ' · ' + g.descripcion : ''}`,
     monto: -g.monto,
   }));
-
   items = items.filter(it => {
     if (cuentaFiltro !== 'todas' && it.cuenta !== cuentaFiltro) return false;
     if (q && !it.detalle.toLowerCase().includes(q)) return false;
     return true;
   });
   items.sort((a, b) => b.fecha.localeCompare(a.fecha));
-
   const tagFor = { entrada: 'ok', compra: 'low', gasto: 'mid' };
   const labelFor = { entrada: 'Entrada', compra: 'Compra', gasto: 'Gasto' };
   const tbody = document.getElementById('cajaMovimientosTbody');
@@ -1334,11 +1312,11 @@ function renderHistorial() {
     if (it._tipo === 'venta') {
       return `<tr>
         <td>${it.fecha}</td><td><span class="tag ok">Venta</span></td><td>Ref. ${it.codigo}</td>
-        <td>${escapeHtml(it.nombre)} — ${it.tamano}ML x${it.cantidad}${it.es_recarga ? ' 🔄' : ''}${it.cliente ? ' · ' + escapeHtml(it.cliente) : ''}</td>
+        <td>${escapeHtml(it.nombre)} — ${it.tamano}ML x${it.cantidad}${it.es_recarga ? ' 🔄' : ''}${it.cliente ? ' · ' + escapeHtml(it.cliente) : ''} <span class="hint" style="margin:0;">Folio #${String(it.folio).padStart(4,'0')}</span></td>
         <td>${fmtCOP(it.total)}</td>
-        <td style="display:flex; gap:6px;">
-          <button class="btn small" data-editpedido="${it.folio}" title="Editar pedido (agregar/quitar productos)">✏️</button>
+        <td style="display:flex; gap:6px; flex-wrap:wrap;">
           <button class="btn small" data-resend-id="${it.id}" title="Reenviar ticket por WhatsApp">📤</button>
+          <button class="btn small" data-editarpedido="${it.folio}" title="Editar este pedido">✏️ Editar</button>
           <button class="btn small danger" data-id="${it.id}" data-tipo="venta">Eliminar</button>
         </td>
       </tr>`;
@@ -1351,11 +1329,13 @@ function renderHistorial() {
     </tr>`;
   }).join('');
 }
+
 document.getElementById('historialTbody').addEventListener('click', (e) => {
-  const editBtn = e.target.closest('button[data-editpedido]');
-  if (editBtn) { abrirEditarPedido(editBtn.getAttribute('data-editpedido')); return; }
   const resendBtn = e.target.closest('button[data-resend-id]');
   if (resendBtn) { resendTicketForVenta(resendBtn.getAttribute('data-resend-id')); return; }
+  // ← NUEVO: botón editar pedido desde historial
+  const editPedidoBtn = e.target.closest('button[data-editarpedido]');
+  if (editPedidoBtn) { abrirEditarPedido(editPedidoBtn.getAttribute('data-editarpedido')); return; }
   const btn = e.target.closest('button[data-id]');
   if (!btn) return;
   deleteTarget = { id: btn.getAttribute('data-id'), tipo: btn.getAttribute('data-tipo') };
@@ -1381,108 +1361,7 @@ document.getElementById('confirmDeleteBtn').addEventListener('click', () => runA
 }));
 
 // ---------------------------------------------------------------------------
-// EDITAR PEDIDO — agregar / quitar productos de un pedido (folio) ya guardado
-// ---------------------------------------------------------------------------
-
-let editarPedidoFolio = null;
-
-function abrirEditarPedido(folio) {
-  editarPedidoFolio = folio;
-  document.getElementById('epFolioLabel').textContent = String(folio).padStart(4, '0');
-  document.getElementById('epError').textContent = '';
-
-  const sel = document.getElementById('epCodigo');
-  sel.innerHTML = '<option value="">— selecciona —</option>' +
-    [...DATA.fragancias].sort((a, b) => a.nombre.localeCompare(b.nombre))
-      .map(f => `<option value="${f.codigo}">${escapeHtml(f.codigo + ' — ' + f.nombre)}</option>`).join('');
-
-  document.getElementById('epTamano').value = '10';
-  document.getElementById('epCantidad').value = '1';
-  document.getElementById('epPrecio').value = '';
-  document.getElementById('epEsRecarga').checked = false;
-
-  _epRenderActual(folio);
-  document.getElementById('editarPedidoOverlay').classList.add('open');
-}
-
-function _epRenderActual(folio) {
-  const tbody = document.getElementById('epActualBody');
-  const items = DATA.ventas.filter(v => String(v.folio) === String(folio));
-
-  if (!items.length) {
-    tbody.innerHTML = '<tr><td colspan="6" class="hint" style="text-align:center;">Sin productos en este pedido.</td></tr>';
-    return;
-  }
-
-  tbody.innerHTML = items.map(v => `
-    <tr>
-      <td>${escapeHtml(v.nombre)}${v.es_recarga ? ' <span class="hint" style="margin:0;">(Recarga)</span>' : ''}</td>
-      <td>${v.tamano} ML</td>
-      <td>${v.cantidad}</td>
-      <td>${fmtCOP(v.precio_unit)}</td>
-      <td>${fmtCOP(v.total)}</td>
-      <td><button class="btn small danger" data-ep-del="${v.id}" title="Quitar este producto del pedido">🗑️</button></td>
-    </tr>`).join('');
-}
-
-document.getElementById('epCerrarBtn').addEventListener('click', () => {
-  editarPedidoFolio = null;
-  document.getElementById('editarPedidoOverlay').classList.remove('open');
-});
-
-document.getElementById('epActualBody').addEventListener('click', (e) => {
-  const btn = e.target.closest('button[data-ep-del]');
-  if (!btn) return;
-  if (!confirm('¿Quitar este producto del pedido? El stock se devolverá automáticamente.')) return;
-  const ventaId = btn.getAttribute('data-ep-del');
-  const folio = editarPedidoFolio;
-  runAction(async () => {
-    await api('/api/venta/' + ventaId, { method: 'DELETE' });
-    showToast('Producto quitado del pedido');
-  }).then(() => { if (folio != null) _epRenderActual(folio); });
-});
-
-document.getElementById('epBtnAgregar').addEventListener('click', () => {
-  const folio    = editarPedidoFolio;
-  const codigo   = document.getElementById('epCodigo').value.trim();
-  const tamano   = Number(document.getElementById('epTamano').value);
-  const cantidad = Number(document.getElementById('epCantidad').value) || 0;
-  const precio   = Number(document.getElementById('epPrecio').value) || 0;
-  const recarga  = document.getElementById('epEsRecarga').checked;
-  const errDiv   = document.getElementById('epError');
-  errDiv.textContent = '';
-
-  if (!codigo)          { errDiv.textContent = '⚠️ Selecciona una fragancia.'; return; }
-  if (!(cantidad > 0))  { errDiv.textContent = '⚠️ La cantidad debe ser al menos 1.'; return; }
-  if (!(precio > 0))    { errDiv.textContent = '⚠️ Ingresa un precio mayor a 0.'; return; }
-
-  runAction(async () => {
-    await api('/api/venta/agregar-item', {
-      method: 'POST',
-      body: JSON.stringify({
-        folio: folio,
-        codigo: codigo,
-        tamano: tamano,
-        cantidad: cantidad,
-        precioUnit: precio,
-        precioOriginal: precio,
-        descuentoPct: 0,
-        esRecarga: recarga,
-      }),
-    });
-    showToast('Producto agregado al pedido');
-  }).then(() => {
-    if (folio == null) return;
-    document.getElementById('epCodigo').value = '';
-    document.getElementById('epCantidad').value = '1';
-    document.getElementById('epPrecio').value = '';
-    document.getElementById('epEsRecarga').checked = false;
-    _epRenderActual(folio);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// BACKUP / EXPORT / IMPORT FRAGANCIAS
+// BACKUP / EXPORT / IMPORT
 // ---------------------------------------------------------------------------
 
 document.getElementById('exportExcelBtn').addEventListener('click', () => { window.location.href = '/api/export/excel'; });
@@ -1531,7 +1410,7 @@ document.getElementById('importExcelStockFileInput').addEventListener('change', 
       formData.append('file', file);
       const res = await fetch('/api/fragancia/import-excel', { method: 'POST', body: formData });
       let body = null;
-      try { body = await res.json(); } catch (err) { /* no body */ }
+      try { body = await res.json(); } catch (err) { }
       if (!res.ok || (body && body.ok === false)) {
         throw new Error((body && body.error) ? body.error : `Error ${res.status}`);
       }
@@ -1551,6 +1430,116 @@ document.getElementById('importExcelStockFileInput').addEventListener('change', 
     }
   });
   e.target.value = '';
+});
+
+// ---------------------------------------------------------------------------
+// ✏️ EDITAR PEDIDO — agregar o quitar productos de un folio ya guardado
+// ---------------------------------------------------------------------------
+
+function abrirEditarPedido(folio) {
+  folio = String(folio);
+  document.getElementById('epFolioLabel').textContent = folio;
+  document.getElementById('epError').textContent = '';
+
+  // Llenar select de fragancias
+  const sel = document.getElementById('epCodigo');
+  sel.innerHTML = '<option value="">— selecciona —</option>';
+  [...DATA.fragancias].sort((a, b) => a.nombre.localeCompare(b.nombre)).forEach(f => {
+    const opt = document.createElement('option');
+    opt.value = f.codigo;
+    opt.textContent = f.codigo + ' — ' + f.nombre;
+    sel.appendChild(opt);
+  });
+
+  epRenderActual(folio);
+
+  document.getElementById('epBtnAgregar').dataset.folio = folio;
+  document.getElementById('epCodigo').value = '';
+  document.getElementById('epTamano').value = '10';
+  document.getElementById('epCantidad').value = '1';
+  document.getElementById('epPrecio').value = '';
+  document.getElementById('epEsRecarga').checked = false;
+
+  document.getElementById('epOverlay').classList.add('open');
+}
+
+function epRenderActual(folio) {
+  const ventas = DATA.ventas.filter(v => String(v.folio) === String(folio));
+  const tbody = document.getElementById('epActualBody');
+  if (!ventas.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--muted); padding:14px;">El pedido quedó vacío.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = ventas.map(v => {
+    const precio = v.precio_unit != null ? v.precio_unit : 0;
+    return `<tr id="ep-row-${v.id}">
+      <td>${escapeHtml(v.nombre)}${v.es_recarga ? ' <span class="tag mid">Recarga</span>' : ''}</td>
+      <td style="text-align:center;">${v.tamano} ML</td>
+      <td style="text-align:center;">${v.cantidad}</td>
+      <td style="text-align:right;">${fmtCOP(precio)}</td>
+      <td style="text-align:right;">${fmtCOP(v.total)}</td>
+      <td style="text-align:center;">
+        <button class="btn small danger" onclick="epEliminarItem('${v.id}','${folio}')">🗑️ Quitar</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+async function epEliminarItem(ventaId, folio) {
+  if (!confirm('¿Quitar este producto del pedido? El stock se devolverá automáticamente.')) return;
+  try {
+    const data = await api('/api/venta/' + ventaId, { method: 'DELETE' });
+    DATA.ventas = DATA.ventas.filter(v => v.id !== ventaId);
+    epRenderActual(folio);
+    renderHistorial();
+    renderCuentas();
+    showToast('Producto quitado del pedido');
+  } catch (err) {
+    showToast(err.message || 'Error al quitar el producto', true);
+  }
+}
+
+document.getElementById('epBtnAgregar').addEventListener('click', async function () {
+  const folio    = this.dataset.folio;
+  const codigo   = document.getElementById('epCodigo').value.trim();
+  const tamano   = parseInt(document.getElementById('epTamano').value);
+  const cantidad = parseInt(document.getElementById('epCantidad').value);
+  const precio   = parseFloat(document.getElementById('epPrecio').value);
+  const recarga  = document.getElementById('epEsRecarga').checked;
+  const errDiv   = document.getElementById('epError');
+  errDiv.textContent = '';
+
+  if (!codigo)         { errDiv.textContent = '⚠️ Selecciona una fragancia.'; return; }
+  if (!(cantidad > 0)) { errDiv.textContent = '⚠️ La cantidad debe ser al menos 1.'; return; }
+  if (!(precio > 0))   { errDiv.textContent = '⚠️ Ingresa un precio mayor a 0.'; return; }
+
+  this.disabled = true;
+  this.textContent = 'Guardando…';
+  try {
+    const data = await api('/api/venta/agregar-item', {
+      method: 'POST',
+      body: JSON.stringify({ folio, codigo, tamano, cantidad, precioUnit: precio, precioOriginal: precio, descuentoPct: 0, esRecarga: recarga }),
+    });
+    const v = data.venta;
+    DATA.ventas.unshift({ id: v.id, folio: v.folio, fecha: v.fecha, codigo: v.codigo, nombre: v.nombre, tamano: v.tamano, cantidad: v.cantidad, precio_unit: v.precioUnit, total: v.total, es_recarga: v.esRecarga ? 1 : 0 });
+    epRenderActual(folio);
+    document.getElementById('epCodigo').value = '';
+    document.getElementById('epCantidad').value = '1';
+    document.getElementById('epPrecio').value = '';
+    document.getElementById('epEsRecarga').checked = false;
+    renderHistorial();
+    renderCuentas();
+    showToast('Producto agregado al pedido ✅');
+  } catch (err) {
+    errDiv.textContent = '⚠️ ' + (err.message || 'Error inesperado');
+  } finally {
+    this.disabled = false;
+    this.textContent = '➕ Agregar al pedido';
+  }
+});
+
+document.getElementById('epCerrarBtn').addEventListener('click', () => {
+  document.getElementById('epOverlay').classList.remove('open');
 });
 
 // ---------------------------------------------------------------------------
