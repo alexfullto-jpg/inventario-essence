@@ -350,25 +350,27 @@
 <!-- ================= CUENTAS POR COBRAR ================= -->
 <section class="tab-content" id="tab-cuentas">
   <div class="kpi-grid" id="cuentasKpiGrid"></div>
+
   <div class="card">
-    <h3>Facturas con saldo pendiente</h3>
-    <div class="filter-row">
+    <h3>⚡ Facturas</h3>
+    <div class="filter-row" style="margin-bottom:16px;">
       <button class="pill-btn active" data-cfilter="pendientes">Pendientes</button>
       <button class="pill-btn" data-cfilter="todas">Todas</button>
-      <input type="text" class="search-input" id="cuentasSearch" placeholder="Buscar por cliente..." style="margin-bottom:0; margin-left:auto;">
+      <input type="text" class="search-input" id="cuentasSearch" placeholder="Buscar cliente..." style="margin-bottom:0; margin-left:auto; max-width:220px;">
     </div>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>Fecha</th><th>Folio</th><th>Cliente</th><th>Total</th><th>Abonado</th><th>Saldo</th><th>Estado</th><th></th></tr></thead>
+    <div class="table-wrap fc-table-wrap">
+      <table class="fc-table">
+        <thead><tr><th>Folio</th><th>Cliente</th><th>Monto / Progreso</th><th>Estado</th><th>Acciones</th></tr></thead>
         <tbody id="facturasTbody"></tbody>
       </table>
     </div>
   </div>
+
   <div class="card">
-    <h3>Historial de abonos</h3>
+    <h3>💸 Historial de abonos</h3>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Fecha</th><th>Folio</th><th>Cliente</th><th>Monto</th><th>Cuenta</th><th>Nota</th><th></th></tr></thead>
+        <thead><tr><th>Folio · Fecha</th><th>Cliente</th><th>Monto</th><th>Cuenta</th><th>Nota</th><th></th></tr></thead>
         <tbody id="abonosTbody"></tbody>
       </table>
     </div>

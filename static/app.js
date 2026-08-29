@@ -1474,15 +1474,40 @@ document.querySelectorAll('.pill-btn[data-cfilter]').forEach(btn => {
 document.getElementById('cuentasSearch').addEventListener('input', debounce(renderCuentas, 150));
 
 function renderCuentas() {
-  const porCobrar = DATA.facturas.reduce((s, f) => s + f.saldo, 0);
+  const porCobrar     = DATA.facturas.reduce((s, f) => s + f.saldo, 0);
   const totalFacturado = DATA.facturas.reduce((s, f) => s + f.total, 0);
-  const nPendientes = DATA.facturas.filter(f => f.saldo > 0).length;
-  const nAtrasadas = DATA.facturas.filter(f => f.saldo > 0 && diasDesde(f.fecha) > 15).length;
+  const totalCobrado  = totalFacturado - porCobrar;
+  const nPendientes   = DATA.facturas.filter(f => f.saldo > 0).length;
+  const nAtrasadas    = DATA.facturas.filter(f => f.saldo > 0 && diasDesde(f.fecha) > 15).length;
+  const nPagadas      = DATA.facturas.filter(f => f.saldo <= 0).length;
+  const pctCobrado    = totalFacturado > 0 ? Math.round(totalCobrado / totalFacturado * 100) : 100;
+
+  // ── KPIs futuristas ────────────────────────────────────────────────────────
   document.getElementById('cuentasKpiGrid').innerHTML = `
-    <div class="kpi ${porCobrar > 0 ? 'warn' : 'ok'}"><div class="label">Total por cobrar</div><div class="value">${fmtCOP(porCobrar)}</div></div>
-    <div class="kpi"><div class="label">Facturas pendientes</div><div class="value">${nPendientes}</div></div>
-    <div class="kpi ${nAtrasadas > 0 ? 'danger' : 'ok'}"><div class="label">Atrasadas (+15 días)</div><div class="value">${nAtrasadas}</div></div>
-    <div class="kpi ok"><div class="label">Total facturado histórico</div><div class="value">${fmtCOP(totalFacturado)}</div></div>`;
+    <div class="kpi ${porCobrar > 0 ? 'warn' : 'ok'}">
+      <div class="kpi-icon">💳</div>
+      <div class="label">Total por cobrar</div>
+      <div class="value">${fmtCOP(porCobrar)}</div>
+      <div class="kpi-sub">${nPendientes} factura${nPendientes !== 1 ? 's' : ''} pendiente${nPendientes !== 1 ? 's' : ''}</div>
+    </div>
+    <div class="kpi ${nAtrasadas > 0 ? 'danger' : 'ok'}">
+      <div class="kpi-icon">⏰</div>
+      <div class="label">Atrasadas +15 días</div>
+      <div class="value">${nAtrasadas}</div>
+      <div class="kpi-sub">${nAtrasadas === 0 ? 'Todo al día ✓' : 'requieren atención'}</div>
+    </div>
+    <div class="kpi ok">
+      <div class="kpi-icon">✅</div>
+      <div class="label">Ya cobrado</div>
+      <div class="value">${fmtCOP(totalCobrado)}</div>
+      <div class="kpi-sub">${nPagadas} factura${nPagadas !== 1 ? 's' : ''} saldada${nPagadas !== 1 ? 's' : ''}</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-icon">📊</div>
+      <div class="label">Recuperación</div>
+      <div class="value">${pctCobrado}%</div>
+      <div class="kpi-sub">del total facturado</div>
+    </div>`;
 
   const q = (document.getElementById('cuentasSearch').value || '').trim().toLowerCase();
   let facturas = DATA.facturas.filter(f => {
@@ -1490,38 +1515,83 @@ function renderCuentas() {
     if (q && !String(f.cliente || '').toLowerCase().includes(q)) return false;
     return true;
   });
+
+  // ── Cards de facturas ─────────────────────────────────────────────────────
   const tbody = document.getElementById('facturasTbody');
-  tbody.innerHTML = facturas.length === 0
-    ? '<tr><td colspan="8"><div class="empty-note">No hay facturas que coincidan.</div></td></tr>'
-    : facturas.map(f => {
-      const abonado = f.abonos.reduce((s, a) => s + a.monto, 0);
+  if (facturas.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="8"><div class="empty-note">No hay facturas que coincidan.</div></td></tr>';
+  } else {
+    tbody.innerHTML = facturas.map((f, idx) => {
+      const abonado  = f.abonos.reduce((s, a) => s + a.monto, 0);
       const atrasada = f.saldo > 0 && diasDesde(f.fecha) > 15;
-      const tagClass = f.estado === 'Pagada' ? 'ok' : (atrasada ? 'low' : (f.estado === 'Abono parcial' ? 'mid' : 'low'));
-      const estadoLabel = atrasada ? `⏰ Atrasada (${diasDesde(f.fecha)}d)` : f.estado;
-      return `<tr>
-        <td>${f.fecha}</td><td>#${String(f.folio).padStart(4, '0')}</td><td>${escapeHtml(f.cliente || '—')}</td>
-        <td>${fmtCOP(f.total)}</td><td>${fmtCOP(abonado)}</td><td>${fmtCOP(f.saldo)}</td>
-        <td><span class="tag ${tagClass}">${estadoLabel}</span></td>
-        <td style="display:flex; gap:6px; flex-wrap:wrap;">
-          ${f.saldo > 0 ? `<button class="btn small primary" data-abonar="${f.id}">+ Abonar</button>` : ''}
-          <button class="btn small" data-estadofactura="${f.id}" title="Enviar estado de cuenta por WhatsApp">📤 Estado</button>
-          <button class="btn small" data-editcliente="${f.id}">✏️ Cliente</button>
-          <button class="btn small" data-editarpedido="${f.folio}" title="Agregar o quitar productos de este pedido">✏️ Pedido</button>
+      const pagada   = f.saldo <= 0;
+      const dias     = diasDesde(f.fecha);
+      const pctPago  = f.total > 0 ? Math.min(100, Math.round(abonado / f.total * 100)) : 100;
+
+      let badgeClass, badgeLabel, rowGlow;
+      if (pagada)        { badgeClass = 'fc-badge-ok';      badgeLabel = '✓ Pagada';                       rowGlow = ''; }
+      else if (atrasada) { badgeClass = 'fc-badge-danger';  badgeLabel = `⚡ Atrasada ${dias}d`;           rowGlow = 'fc-row-danger'; }
+      else               { badgeClass = 'fc-badge-warn';    badgeLabel = f.estado === 'Abono parcial' ? '◑ Parcial' : '○ Pendiente'; rowGlow = 'fc-row-warn'; }
+
+      return `<tr class="fc-row ${rowGlow}" style="animation-delay:${idx * 40}ms">
+        <td>
+          <div class="fc-folio">#${String(f.folio).padStart(4,'0')}</div>
+          <div class="fc-fecha">${f.fecha}</div>
+        </td>
+        <td>
+          <div class="fc-cliente">${escapeHtml(f.cliente || '—')}</div>
+        </td>
+        <td>
+          <div class="fc-monto-wrap">
+            <div class="fc-total">${fmtCOP(f.total)}</div>
+            <div class="fc-prog-wrap">
+              <div class="fc-prog-bar" style="width:${pctPago}%" data-pct="${pctPago}"></div>
+            </div>
+            <div class="fc-prog-labels">
+              <span class="fc-abonado">Abonado ${fmtCOP(abonado)}</span>
+              <span class="fc-saldo ${atrasada ? 'fc-saldo-danger' : ''}">Saldo ${fmtCOP(f.saldo)}</span>
+            </div>
+          </div>
+        </td>
+        <td><span class="fc-badge ${badgeClass}">${badgeLabel}</span></td>
+        <td>
+          <div class="fc-actions">
+            ${f.saldo > 0 ? `<button class="btn small primary fc-btn-abonar" data-abonar="${f.id}">+ Abonar</button>` : ''}
+            <button class="btn small" data-estadofactura="${f.id}" title="Estado de cuenta WhatsApp">📤</button>
+            <button class="btn small" data-editcliente="${f.id}" title="Editar cliente">✏️</button>
+            <button class="btn small" data-editarpedido="${f.folio}" title="Editar pedido">📋</button>
+          </div>
         </td>
       </tr>`;
     }).join('');
 
+    // Animar barras de progreso después de render
+    requestAnimationFrame(() => {
+      document.querySelectorAll('.fc-prog-bar').forEach(bar => {
+        const pct = bar.getAttribute('data-pct');
+        bar.style.width = '0%';
+        setTimeout(() => { bar.style.width = pct + '%'; }, 80);
+      });
+    });
+  }
+
+  // ── Historial abonos ──────────────────────────────────────────────────────
   const abonos = [];
   DATA.facturas.forEach(f => f.abonos.forEach(a => abonos.push({ ...a, folio: f.folio, cliente: f.cliente })));
   abonos.sort((a, b) => b.fecha.localeCompare(a.fecha));
   document.getElementById('abonosTbody').innerHTML = abonos.length === 0
     ? '<tr><td colspan="7"><div class="empty-note">Aún no hay abonos registrados.</div></td></tr>'
     : abonos.map(a => `<tr>
-        <td>${a.fecha}</td><td>#${String(a.folio).padStart(4, '0')}</td><td>${escapeHtml(a.cliente || '—')}</td>
-        <td>${fmtCOP(a.monto)}</td><td>${escapeHtml(a.cuenta || '—')}</td><td>${escapeHtml(a.nota || '')}</td>
-        <td style="display:flex; gap:6px;">
-          <button class="btn small" data-editabono="${a.id}">✏️</button>
-          <button class="btn small danger" data-id="${a.id}" data-tipo="abono">🗑️</button>
+        <td><span class="fc-folio">#${String(a.folio).padStart(4,'0')}</span><br><small style="color:var(--muted)">${a.fecha}</small></td>
+        <td><div class="fc-cliente">${escapeHtml(a.cliente || '—')}</div></td>
+        <td><strong style="color:var(--ok)">${fmtCOP(a.monto)}</strong></td>
+        <td style="color:var(--muted)">${escapeHtml(a.cuenta || '—')}</td>
+        <td style="color:var(--muted);font-size:12px">${escapeHtml(a.nota || '')}</td>
+        <td>
+          <div style="display:flex;gap:6px;">
+            <button class="btn small" data-editabono="${a.id}">✏️</button>
+            <button class="btn small danger" data-id="${a.id}" data-tipo="abono">🗑️</button>
+          </div>
         </td>
       </tr>`).join('');
 }
