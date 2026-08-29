@@ -212,15 +212,51 @@ function renderDashboard() {
   const lowStockCount = DATA.fragancias.filter(f => f.stock_gr < r30.fragGr).length;
 
   document.getElementById('kpiGrid').innerHTML = `
-    <div class="kpi"><div class="label">Ventas este mes</div><div class="value">${unidadesMes}</div></div>
-    <div class="kpi ok"><div class="label">Ingresos este mes</div><div class="value">${fmtCOP(ingresosMes)}</div></div>
-    <div class="kpi ${utilidadNetaMes >= 0 ? 'ok' : 'danger'}"><div class="label">Utilidad neta del mes</div><div class="value">${fmtCOP(utilidadNetaMes)}</div></div>
-    <div class="kpi ${margenMes >= 30 ? 'ok' : (margenMes >= 0 ? 'warn' : 'danger')}"><div class="label">Margen este mes</div><div class="value">${margenMes.toFixed(1)}%</div></div>
-    <div class="kpi"><div class="label">Gastos este mes</div><div class="value">${fmtCOP(gastosMes)}</div></div>
-    <div class="kpi ${lowStockCount > 0 ? 'danger' : 'ok'}"><div class="label">Referencias en alerta</div><div class="value">${lowStockCount}</div></div>
-    <div class="kpi ${porCobrar > 0 ? 'warn' : 'ok'}"><div class="label">Por cobrar (facturas)</div><div class="value">${fmtCOP(porCobrar)}</div></div>
-    <div class="kpi ${atrasadas > 0 ? 'danger' : 'ok'}"><div class="label">Fiados atrasados (+15 días)</div><div class="value">${atrasadas}</div></div>
-    <div class="kpi ok"><div class="label">Utilidad neta histórica</div><div class="value">${fmtCOP(utilidadTotal - gastosTotal)}</div></div>
+    <div class="kpi">
+      <div class="kpi-icon">🛒</div>
+      <div class="label">Ventas este mes</div>
+      <div class="value">${unidadesMes}</div>
+    </div>
+    <div class="kpi ok">
+      <div class="kpi-icon">💰</div>
+      <div class="label">Ingresos este mes</div>
+      <div class="value">${fmtCOP(ingresosMes)}</div>
+    </div>
+    <div class="kpi ${utilidadNetaMes >= 0 ? 'ok' : 'danger'}">
+      <div class="kpi-icon">📈</div>
+      <div class="label">Utilidad neta del mes</div>
+      <div class="value">${fmtCOP(utilidadNetaMes)}</div>
+    </div>
+    <div class="kpi ${margenMes >= 30 ? 'ok' : (margenMes >= 0 ? 'warn' : 'danger')}">
+      <div class="kpi-icon">%</div>
+      <div class="label">Margen este mes</div>
+      <div class="value">${margenMes.toFixed(1)}%</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-icon">💸</div>
+      <div class="label">Gastos este mes</div>
+      <div class="value">${fmtCOP(gastosMes)}</div>
+    </div>
+    <div class="kpi ${lowStockCount > 0 ? 'danger' : 'ok'}">
+      <div class="kpi-icon">⚗️</div>
+      <div class="label">Referencias en alerta</div>
+      <div class="value">${lowStockCount}</div>
+    </div>
+    <div class="kpi ${porCobrar > 0 ? 'warn' : 'ok'}">
+      <div class="kpi-icon">🧾</div>
+      <div class="label">Por cobrar (facturas)</div>
+      <div class="value">${fmtCOP(porCobrar)}</div>
+    </div>
+    <div class="kpi ${atrasadas > 0 ? 'danger' : 'ok'}">
+      <div class="kpi-icon">⏰</div>
+      <div class="label">Fiados atrasados (+15 días)</div>
+      <div class="value">${atrasadas}</div>
+    </div>
+    <div class="kpi ok">
+      <div class="kpi-icon">🏆</div>
+      <div class="label">Utilidad neta histórica</div>
+      <div class="value">${fmtCOP(utilidadTotal - gastosTotal)}</div>
+    </div>
   `;
 
   const low = DATA.fragancias.filter(f => f.stock_gr < r30.fragGr).sort((a, b) => a.stock_gr - b.stock_gr);
@@ -259,37 +295,190 @@ function renderDashboard() {
   renderChartTopSellers(top);
 }
 
-function svgBarChart(items, opts = {}) {
-  if (items.length === 0) return '<div class="empty-note">Aún no hay datos suficientes para graficar.</div>';
-  const w = 560, barGap = 10, leftPad = 4, barH = 26;
-  const maxVal = Math.max(...items.map(i => i.value), 1);
-  const h = items.length * (barH + barGap) + barGap;
-  const bars = items.map((it, idx) => {
-    const y = barGap + idx * (barH + barGap);
-    const barW = Math.max(2, (it.value / maxVal) * (w - 150));
-    return `
-      <text x="0" y="${y + barH / 2 + 4}" fill="var(--muted)" font-size="11" font-family="Inter">${escapeHtml(it.label)}</text>
-      <rect x="130" y="${y}" width="${barW}" height="${barH}" rx="5" fill="var(--gold)" opacity="0.85"/>
-      <text x="${130 + barW + 8}" y="${y + barH / 2 + 4}" fill="var(--ivory)" font-size="11.5" font-family="Inter" font-weight="600">${escapeHtml(it.valueLabel || it.value)}</text>
-    `;
-  }).join('');
-  return `<svg viewBox="0 ${-barGap} ${w} ${h}" width="100%" height="${h}" xmlns="http://www.w3.org/2000/svg">${bars}</svg>`;
+// ─── CHART.JS REGISTRY ────────────────────────────────────────────────────
+// Guardamos instancias para destruir antes de redibujar
+const _charts = {};
+
+function destroyChart(id) {
+  if (_charts[id]) { _charts[id].destroy(); delete _charts[id]; }
 }
 
+// Paleta compartida
+const CHART_GOLD      = 'rgba(201,162,39,1)';
+const CHART_GOLD_DIM  = 'rgba(201,162,39,0.18)';
+const CHART_GOLD_FILL = 'rgba(201,162,39,0.08)';
+const CHART_IVORY     = 'rgba(239,231,218,0.85)';
+const CHART_MUTED     = 'rgba(138,127,112,0.8)';
+const CHART_OK        = 'rgba(61,158,106,1)';
+const CHART_WARN      = 'rgba(209,143,63,1)';
+const CHART_LINE      = 'rgba(201,162,39,0.10)';
+
+const CHART_DEFAULTS = {
+  responsive: true,
+  maintainAspectRatio: false,
+  animation: { duration: 700, easing: 'easeOutQuart' },
+  plugins: {
+    legend: { display: false },
+    tooltip: {
+      backgroundColor: '#1c1916',
+      borderColor: 'rgba(201,162,39,0.3)',
+      borderWidth: 1,
+      titleColor: CHART_IVORY,
+      bodyColor: CHART_MUTED,
+      padding: 12,
+      titleFont: { family: 'Space Grotesk, Inter, sans-serif', size: 13, weight: '700' },
+      bodyFont:  { family: 'Space Grotesk, Inter, sans-serif', size: 12 },
+    },
+  },
+  scales: {
+    x: {
+      grid: { color: CHART_LINE, drawBorder: false },
+      ticks: { color: CHART_MUTED, font: { family: 'Space Grotesk, Inter, sans-serif', size: 11 } },
+      border: { color: 'transparent' },
+    },
+    y: {
+      grid: { color: CHART_LINE, drawBorder: false },
+      ticks: { color: CHART_MUTED, font: { family: 'Space Grotesk, Inter, sans-serif', size: 11 } },
+      border: { color: 'transparent' },
+    },
+  },
+};
+
+// ─── VENTAS POR MES (Line chart con área) ─────────────────────────────────
 function renderChartVentasMes() {
   const porMes = {};
   DATA.ventas.forEach(v => {
     const ym = v.fecha.slice(0, 7);
     porMes[ym] = (porMes[ym] || 0) + v.total;
   });
-  const meses = Object.keys(porMes).sort().slice(-6);
-  const items = meses.map(m => ({ label: m, value: porMes[m], valueLabel: fmtCOP(porMes[m]) }));
-  document.getElementById('chartVentasMes').innerHTML = svgBarChart(items);
+  const meses  = Object.keys(porMes).sort().slice(-8);
+  const labels = meses.map(m => {
+    const [y, mo] = m.split('-');
+    const names = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+    return `${names[parseInt(mo)-1]} ${y.slice(2)}`;
+  });
+  const values = meses.map(m => porMes[m]);
+
+  const wrap = document.getElementById('chartVentasMes');
+  if (meses.length === 0) {
+    wrap.innerHTML = '<div class="empty-note">Aún no hay datos suficientes para graficar.</div>';
+    return;
+  }
+  wrap.innerHTML = '<div class="chart-wrap" style="height:220px"><canvas id="canvasVentasMes"></canvas></div>';
+  destroyChart('ventasMes');
+
+  const ctx = document.getElementById('canvasVentasMes').getContext('2d');
+
+  // Gradiente de relleno
+  const grad = ctx.createLinearGradient(0, 0, 0, 220);
+  grad.addColorStop(0,   'rgba(201,162,39,0.22)');
+  grad.addColorStop(0.6, 'rgba(201,162,39,0.06)');
+  grad.addColorStop(1,   'rgba(201,162,39,0)');
+
+  _charts['ventasMes'] = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        data: values,
+        borderColor: CHART_GOLD,
+        borderWidth: 2.5,
+        pointBackgroundColor: CHART_GOLD,
+        pointBorderColor: '#1c1916',
+        pointBorderWidth: 2,
+        pointRadius: 5,
+        pointHoverRadius: 7,
+        fill: true,
+        backgroundColor: grad,
+        tension: 0.42,
+      }],
+    },
+    options: {
+      ...CHART_DEFAULTS,
+      plugins: {
+        ...CHART_DEFAULTS.plugins,
+        tooltip: {
+          ...CHART_DEFAULTS.plugins.tooltip,
+          callbacks: { label: ctx => ' ' + fmtCOP(ctx.parsed.y) },
+        },
+      },
+      scales: {
+        x: { ...CHART_DEFAULTS.scales.x },
+        y: {
+          ...CHART_DEFAULTS.scales.y,
+          ticks: {
+            ...CHART_DEFAULTS.scales.y.ticks,
+            callback: v => {
+              if (v >= 1000000) return '$' + (v/1000000).toFixed(1) + 'M';
+              if (v >= 1000)    return '$' + (v/1000).toFixed(0) + 'k';
+              return '$' + v;
+            },
+          },
+        },
+      },
+    },
+  });
 }
 
+// ─── UTILIDAD POR MES (para comparar con ingresos) ────────────────────────
 function renderChartTopSellers(top) {
-  const items = top.slice(0, 6).map(t => ({ label: t.nombre.length > 22 ? t.nombre.slice(0, 22) + '…' : t.nombre, value: t.qty, valueLabel: t.qty + ' und' }));
-  document.getElementById('chartTopSellers').innerHTML = svgBarChart(items);
+  const items  = top.slice(0, 8);
+  const labels = items.map(t => t.nombre.length > 20 ? t.nombre.slice(0, 20) + '…' : t.nombre);
+  const values = items.map(t => t.qty);
+
+  const wrap = document.getElementById('chartTopSellers');
+  if (items.length === 0) {
+    wrap.innerHTML = '<div class="empty-note">Aún no hay datos suficientes para graficar.</div>';
+    return;
+  }
+  wrap.innerHTML = '<div class="chart-wrap" style="height:220px"><canvas id="canvasTopSellers"></canvas></div>';
+  destroyChart('topSellers');
+
+  const ctx = document.getElementById('canvasTopSellers').getContext('2d');
+
+  // Gradiente horizontal por barra
+  const maxQ = Math.max(...values, 1);
+  const colors = values.map(v => {
+    const pct = v / maxQ;
+    if (pct > 0.8) return 'rgba(201,162,39,0.95)';
+    if (pct > 0.5) return 'rgba(201,162,39,0.75)';
+    return 'rgba(201,162,39,0.50)';
+  });
+
+  _charts['topSellers'] = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        data: values,
+        backgroundColor: colors,
+        borderColor: 'transparent',
+        borderRadius: 6,
+        borderSkipped: false,
+      }],
+    },
+    options: {
+      ...CHART_DEFAULTS,
+      indexAxis: 'y',
+      plugins: {
+        ...CHART_DEFAULTS.plugins,
+        tooltip: {
+          ...CHART_DEFAULTS.plugins.tooltip,
+          callbacks: { label: ctx => ` ${ctx.parsed.x} unidades` },
+        },
+      },
+      scales: {
+        x: {
+          ...CHART_DEFAULTS.scales.x,
+          ticks: {
+            ...CHART_DEFAULTS.scales.x.ticks,
+            callback: v => v + ' u',
+          },
+        },
+        y: { ...CHART_DEFAULTS.scales.y },
+      },
+    },
+  });
 }
 
 function renderProyeccion() {
