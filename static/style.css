@@ -641,3 +641,374 @@ input.cell-input:focus { border-color: var(--gold); }
 .fc-btn-abonar:hover {
   box-shadow: 0 0 22px rgba(201,162,39,0.45) !important;
 }
+
+/* ══════════════════════════════════════════════════
+   REGISTRAR VENTA — Diseño futurista
+   ══════════════════════════════════════════════════ */
+
+/* step label */
+.venta-step-label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+  margin: 20px 0 10px;
+}
+.venta-step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  background: var(--gold);
+  color: #0d0b0a;
+  font-size: 11px;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+.venta-cart-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px; height: 22px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--gold);
+  color: #0d0b0a;
+  font-size: 11px;
+  font-weight: 800;
+  margin-left: 8px;
+}
+
+/* card de venta */
+.venta-card { margin-bottom: 0 !important; }
+
+/* fields row */
+.venta-fields-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+/* toggle fiado */
+.venta-fiado-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+.venta-fiado-toggle input { display: none; }
+.venta-fiado-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(209,143,63,0.3);
+  background: rgba(209,143,63,0.06);
+  color: var(--warn);
+  font-size: 12.5px;
+  font-weight: 600;
+  transition: var(--transition);
+}
+.venta-fiado-toggle input:checked + .venta-fiado-pill {
+  background: rgba(209,143,63,0.18);
+  border-color: var(--warn);
+  box-shadow: 0 0 14px rgba(209,143,63,0.2);
+}
+
+/* buscador spotlight */
+.venta-search-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--surface-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 0 16px;
+  margin-bottom: 10px;
+  transition: var(--transition);
+}
+.venta-search-wrap:focus-within {
+  border-color: rgba(201,162,39,0.5);
+  box-shadow: 0 0 0 3px rgba(201,162,39,0.08);
+}
+.venta-search-icon { font-size: 16px; opacity: 0.5; flex-shrink: 0; }
+.venta-search-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--ivory);
+  font-size: 15px;
+  padding: 14px 0;
+  font-family: var(--font-ui);
+}
+.venta-search-input::placeholder { color: var(--muted-2); }
+
+/* match de fragancia */
+.venta-frag-match {
+  font-size: 12.5px;
+  min-height: 20px;
+  margin-bottom: 16px;
+  padding: 0 4px;
+  transition: var(--transition);
+}
+
+/* selector de tamaño visual */
+.venta-tam-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+.venta-tam-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.venta-tam-btns { display: flex; gap: 8px; }
+.venta-tam-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 70px; height: 56px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--surface-3);
+  color: var(--muted);
+  cursor: pointer;
+  transition: var(--transition);
+  gap: 1px;
+}
+.venta-tam-btn:hover { border-color: rgba(201,162,39,0.35); color: var(--ivory); }
+.venta-tam-btn.active {
+  border-color: var(--gold);
+  background: rgba(201,162,39,0.12);
+  color: var(--gold-soft);
+  box-shadow: 0 0 16px rgba(201,162,39,0.18);
+}
+.venta-tam-ml { font-size: 20px; font-weight: 700; line-height: 1; font-family: var(--font-serif); }
+.venta-tam-unit { font-size: 9px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; opacity: 0.7; }
+
+/* campos numéricos */
+.venta-nums-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.venta-num-field { display: flex; flex-direction: column; gap: 6px; }
+.venta-num-field label { font-size: 11px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; }
+.venta-num-input {
+  width: 140px;
+  background: var(--surface-3);
+  border: 1px solid var(--line);
+  color: var(--ivory);
+  padding: 10px 13px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  outline: none;
+  font-family: var(--font-ui);
+  transition: var(--transition);
+}
+.venta-num-input:focus { border-color: var(--gold); }
+
+/* qty stepper */
+.venta-qty-wrap { display: flex; align-items: center; gap: 0; }
+.venta-qty-btn {
+  width: 36px; height: 40px;
+  background: var(--surface-3);
+  border: 1px solid var(--line);
+  color: var(--ivory);
+  font-size: 18px;
+  cursor: pointer;
+  transition: var(--transition);
+  line-height: 1;
+}
+.venta-qty-btn:first-child { border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
+.venta-qty-btn:last-child  { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+.venta-qty-btn:hover { background: var(--gold); color: #0d0b0a; border-color: var(--gold); }
+.venta-qty-input {
+  width: 54px; height: 40px;
+  background: var(--surface-3);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  border-left: none; border-right: none;
+  color: var(--ivory);
+  font-size: 15px;
+  font-weight: 700;
+  text-align: center;
+  outline: none;
+  font-family: var(--font-ui);
+}
+
+/* recarga toggle */
+.venta-recarga-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  margin: 14px 0;
+}
+.venta-recarga-toggle input { display: none; }
+.venta-recarga-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(79,123,127,0.3);
+  background: rgba(79,123,127,0.06);
+  color: var(--teal);
+  font-size: 12.5px;
+  font-weight: 600;
+  transition: var(--transition);
+}
+.venta-recarga-toggle input:checked + .venta-recarga-pill {
+  background: rgba(79,123,127,0.18);
+  border-color: var(--teal);
+  box-shadow: 0 0 14px rgba(79,123,127,0.2);
+}
+
+/* botón agregar */
+.venta-add-btn {
+  width: 100%;
+  padding: 13px !important;
+  font-size: 14px !important;
+  letter-spacing: 0.05em;
+  margin-top: 4px;
+}
+
+/* ── ITEMS DEL CARRITO ─────────────────────────── */
+.venta-cart-items { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+
+.vc-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--surface-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  animation: fcRowIn 0.3s ease both;
+  transition: var(--transition);
+}
+.vc-item:hover { border-color: rgba(201,162,39,0.2); }
+
+.vc-item-left {
+  flex-shrink: 0;
+}
+.vc-item-tam {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 52px; height: 52px;
+  border-radius: 10px;
+  background: rgba(201,162,39,0.1);
+  border: 1px solid rgba(201,162,39,0.25);
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--gold-soft);
+  font-family: var(--font-serif);
+  line-height: 1;
+}
+.vc-item-tam span { font-size: 9px; font-weight: 700; letter-spacing: 0.1em; color: var(--gold); opacity: 0.8; text-transform: uppercase; }
+
+.vc-item-body { flex: 1; min-width: 0; }
+.vc-item-nombre { font-size: 14px; font-weight: 600; color: var(--ivory); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vc-item-meta { font-size: 11px; color: var(--muted-2); margin: 3px 0 8px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+.vc-badge { display: inline-flex; padding: 2px 8px; border-radius: 999px; font-size: 10px; font-weight: 700; }
+.vc-badge-teal { background: rgba(79,123,127,0.15); color: var(--teal); border: 1px solid rgba(79,123,127,0.3); }
+.vc-badge-gold { background: rgba(201,162,39,0.15); color: var(--gold-soft); border: 1px solid rgba(201,162,39,0.3); }
+
+.vc-item-qty-row { display: flex; align-items: center; gap: 10px; }
+.vc-qty-btn {
+  width: 28px; height: 28px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--ivory);
+  font-size: 16px;
+  cursor: pointer;
+  transition: var(--transition);
+  line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+}
+.vc-qty-btn:hover { background: var(--gold); color: #0d0b0a; border-color: var(--gold); }
+.vc-qty-val { font-size: 15px; font-weight: 700; min-width: 20px; text-align: center; }
+.vc-item-precio { font-size: 12px; color: var(--muted); margin-left: 6px; }
+.vc-precio-old { color: var(--muted-2); margin-right: 4px; }
+
+.vc-item-right { flex-shrink: 0; text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+.vc-item-subtotal { font-size: 17px; font-weight: 700; color: var(--gold-soft); font-family: var(--font-serif); }
+.vc-remove-btn {
+  width: 28px; height: 28px;
+  border-radius: 6px;
+  border: 1px solid rgba(193,84,63,0.25);
+  background: transparent;
+  color: var(--muted-2);
+  font-size: 12px;
+  cursor: pointer;
+  transition: var(--transition);
+}
+.vc-remove-btn:hover { background: rgba(193,84,63,0.12); color: var(--danger); border-color: var(--danger); }
+
+/* total bar */
+.venta-total-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 0 0;
+  border-top: 1px solid var(--line);
+  gap: 12px;
+}
+.venta-total-left { flex: 1; font-size: 12px; color: var(--muted); line-height: 1.5; }
+.venta-preview-mini { font-size: 12px; }
+.venta-total-right { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.venta-total-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; font-weight: 700; }
+.venta-total-val { font-size: 30px; font-weight: 700; font-family: var(--font-serif); color: var(--gold-soft); letter-spacing: -0.01em; }
+
+/* botón registrar */
+.venta-registrar-btn {
+  width: 100%;
+  padding: 16px !important;
+  font-size: 15px !important;
+  letter-spacing: 0.06em;
+  margin-top: 14px;
+  box-shadow: 0 0 30px rgba(201,162,39,0.25) !important;
+}
+.venta-registrar-btn:hover { box-shadow: 0 0 44px rgba(201,162,39,0.45) !important; }
+
+/* ticket panel */
+.venta-ticket-panel {
+  margin-top: 20px;
+  background: linear-gradient(160deg, rgba(61,158,106,0.07), rgba(61,158,106,0.03));
+  border: 1px solid rgba(61,158,106,0.3);
+  border-radius: var(--radius);
+  padding: 24px;
+  animation: fadeIn 0.4s ease;
+}
+.venta-ticket-header { display: flex; align-items: center; gap: 16px; margin-bottom: 18px; }
+.venta-ticket-icon { font-size: 36px; }
+.venta-ticket-title { font-size: 18px; font-weight: 700; color: var(--ok); font-family: var(--font-serif); }
+.venta-ticket-folio { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.venta-ticket-pre {
+  font-family: 'Space Mono', 'Courier New', monospace;
+  font-size: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  white-space: pre-wrap;
+  line-height: 1.7;
+  color: var(--ivory);
+  margin: 0 0 16px;
+}
+.venta-ticket-actions { display: flex; gap: 10px; flex-wrap: wrap; }

@@ -172,79 +172,141 @@
 
 <!-- ================= REGISTRAR VENTA ================= -->
 <section class="tab-content" id="tab-venta">
-  <div class="card">
-    <h3>Datos del pedido</h3>
-    <div class="field-row">
-      <div class="field"><label>Cliente (opcional)</label><input type="text" id="ventaCliente" list="clientesDatalist"><datalist id="clientesDatalist"></datalist></div>
-      <div class="field"><label>WhatsApp del cliente (opcional)</label><input type="text" id="ventaClienteTel" placeholder="Ej: 573001234567"></div>
-      <div class="field"><label>Fecha</label><input type="date" id="ventaFecha"></div>
-    </div>
-    <div class="field-row">
-      <div class="field"><label>Cuenta de pago</label><select id="ventaCuenta"></select></div>
-      <div class="field" style="display:flex; align-items:flex-end;">
-        <label style="display:flex; align-items:center; gap:8px; font-size:13px; color:var(--warn); cursor:pointer; margin:0;">
-          <input type="checkbox" id="ventaFiadoCheckbox" style="width:16px; height:16px; accent-color:var(--warn);">
-          🧾 Fiado (el cliente pagará después)
-        </label>
+
+  <!-- ── PASO 1: Datos del pedido ── -->
+  <div class="venta-step-label"><span class="venta-step-num">01</span> Datos del pedido</div>
+  <div class="card venta-card">
+    <div class="venta-fields-row">
+      <div class="field">
+        <label>👤 Cliente (opcional)</label>
+        <input type="text" id="ventaCliente" list="clientesDatalist" placeholder="Nombre del cliente">
+        <datalist id="clientesDatalist"></datalist>
+      </div>
+      <div class="field">
+        <label>📱 WhatsApp (opcional)</label>
+        <input type="text" id="ventaClienteTel" placeholder="573001234567">
+      </div>
+      <div class="field">
+        <label>📅 Fecha</label>
+        <input type="date" id="ventaFecha">
+      </div>
+      <div class="field">
+        <label>🏦 Cuenta de pago</label>
+        <select id="ventaCuenta"></select>
       </div>
     </div>
-  </div>
-  <div class="card">
-    <h3>Agregar producto al pedido</h3>
-    <div class="field-row">
-      <div class="field" style="grid-column:1/-1;">
-        <label>Fragancia (busca por nombre o por referencia)</label>
-        <input type="text" id="ventaFraganciaSearch" placeholder="Ej: Cloud Ariana Grande, o 954" list="fraganciaDatalist" autocomplete="off">
-        <datalist id="fraganciaDatalist"></datalist>
-      </div>
-    </div>
-    <div class="hint" id="ventaFraganciaMatch"></div>
-    <div class="field-row" style="grid-template-columns:repeat(4,1fr); margin-top:8px;">
-      <div class="field"><label>Tamaño</label>
-        <select id="ventaTamano">
-          <option value="10">10 ML</option>
-          <option value="30" selected>30 ML</option>
-          <option value="50">50 ML</option>
-        </select>
-      </div>
-      <div class="field"><label>Cantidad</label><input type="number" id="ventaCantidad" value="1" min="1"></div>
-      <div class="field"><label>Precio unitario</label><input type="number" id="ventaPrecio"></div>
-      <div class="field"><label>Descuento especial (%)</label><input type="number" id="ventaDescuento" value="0" min="0" max="100" placeholder="0"></div>
-    </div>
-    <div class="hint" id="ventaPrecioConDescuento"></div>
-    <label style="display:flex; align-items:center; gap:8px; margin:12px 0; font-size:13px; color:var(--teal); cursor:pointer;">
-      <input type="checkbox" id="ventaRecargaCheckbox" style="width:16px; height:16px; accent-color:var(--teal);">
-      🔄 El cliente trae su propio frasco (recarga — no descuenta envase)
+    <label class="venta-fiado-toggle">
+      <input type="checkbox" id="ventaFiadoCheckbox">
+      <span class="venta-fiado-pill">🧾 Fiado — el cliente pagará después</span>
     </label>
-    <button class="btn primary" id="addItemToCartBtn">+ Agregar al pedido</button>
-    <div class="hint" id="addItemError" style="color:var(--danger);"></div>
   </div>
-  <div class="card">
-    <h3>Pedido actual (<span id="cartItemCount">0</span> productos)</h3>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>Fragancia</th><th>Tam.</th><th>Cant.</th><th>Precio</th><th>Subtotal</th><th></th></tr></thead>
-        <tbody id="ventaCartTbody"></tbody>
-      </table>
+
+  <!-- ── PASO 2: Agregar producto ── -->
+  <div class="venta-step-label"><span class="venta-step-num">02</span> Agregar producto</div>
+  <div class="card venta-card">
+
+    <!-- Buscador spotlight -->
+    <div class="venta-search-wrap">
+      <span class="venta-search-icon">🔍</span>
+      <input type="text" id="ventaFraganciaSearch" class="venta-search-input"
+             placeholder="Busca fragancia por nombre o referencia..."
+             list="fraganciaDatalist" autocomplete="off">
+      <datalist id="fraganciaDatalist"></datalist>
     </div>
-    <div style="display:flex; justify-content:space-between; align-items:center; padding-top:14px; margin-top:10px; border-top:1px solid var(--line);">
-      <span class="hint" style="margin:0;">Total del pedido</span>
-      <span style="font-size:22px; font-weight:700; color:var(--gold-soft); font-family:'Cormorant Garamond';" id="cartGrandTotal">$0</span>
+    <div class="venta-frag-match" id="ventaFraganciaMatch"></div>
+
+    <!-- Selector de tamaño visual -->
+    <div class="venta-tam-row">
+      <div class="venta-tam-label">Tamaño</div>
+      <div class="venta-tam-btns">
+        <button type="button" class="venta-tam-btn" data-tam="10">
+          <span class="venta-tam-ml">10</span><span class="venta-tam-unit">ML</span>
+        </button>
+        <button type="button" class="venta-tam-btn active" data-tam="30">
+          <span class="venta-tam-ml">30</span><span class="venta-tam-unit">ML</span>
+        </button>
+        <button type="button" class="venta-tam-btn" data-tam="50">
+          <span class="venta-tam-ml">50</span><span class="venta-tam-unit">ML</span>
+        </button>
+      </div>
+      <!-- hidden select para compatibilidad con JS existente -->
+      <select id="ventaTamano" style="display:none;">
+        <option value="10">10 ML</option>
+        <option value="30" selected>30 ML</option>
+        <option value="50">50 ML</option>
+      </select>
     </div>
+
+    <!-- Cantidad, precio, descuento -->
+    <div class="venta-nums-row">
+      <div class="venta-num-field">
+        <label>Cantidad</label>
+        <div class="venta-qty-wrap">
+          <button type="button" class="venta-qty-btn" id="ventaQtyMinus">−</button>
+          <input type="number" id="ventaCantidad" value="1" min="1" class="venta-qty-input">
+          <button type="button" class="venta-qty-btn" id="ventaQtyPlus">+</button>
+        </div>
+      </div>
+      <div class="venta-num-field">
+        <label>Precio unitario</label>
+        <input type="number" id="ventaPrecio" class="venta-num-input" placeholder="$0">
+      </div>
+      <div class="venta-num-field">
+        <label>Descuento (%)</label>
+        <input type="number" id="ventaDescuento" value="0" min="0" max="100" class="venta-num-input" placeholder="0">
+      </div>
+    </div>
+    <div class="hint" id="ventaPrecioConDescuento" style="margin-top:4px;"></div>
+
+    <label class="venta-recarga-toggle">
+      <input type="checkbox" id="ventaRecargaCheckbox">
+      <span class="venta-recarga-pill">🔄 Recarga — cliente trae su frasco</span>
+    </label>
+
+    <button class="btn primary venta-add-btn" id="addItemToCartBtn">＋ Agregar al pedido</button>
+    <div class="hint" id="addItemError" style="color:var(--danger); margin-top:8px;"></div>
   </div>
-  <div class="card" style="background:rgba(201,162,39,0.06); border-color:var(--gold);">
-    <div class="hint" id="ventaPreview" style="font-size:13px;"></div>
+
+  <!-- ── PASO 3: Carrito ── -->
+  <div class="venta-step-label"><span class="venta-step-num">03</span> Pedido actual <span id="cartItemCount" class="venta-cart-count">0</span></div>
+  <div class="card venta-card">
+    <div id="ventaCartItems" class="venta-cart-items">
+      <div class="empty-note">Agrega productos para armar el pedido.</div>
+    </div>
+    <!-- Total flotante -->
+    <div class="venta-total-bar">
+      <div class="venta-total-left">
+        <div class="venta-preview-mini" id="ventaPreview"></div>
+      </div>
+      <div class="venta-total-right">
+        <span class="venta-total-label">Total</span>
+        <span class="venta-total-val" id="cartGrandTotal">$0</span>
+      </div>
+    </div>
+    <!-- tbody oculto para compat con JS -->
+    <table style="display:none"><tbody id="ventaCartTbody"></tbody></table>
   </div>
-  <button class="btn primary" id="registrarVentaBtn">Registrar pedido completo</button>
-  <div class="hint" id="ventaError" style="color:var(--danger);"></div>
-  <div class="card" id="ticketPanel" style="display:none; border-color:var(--ok); background:rgba(74,157,111,0.06); margin-top:18px;">
-    <h3 style="color:var(--ok);">✅ Pedido registrado — Ticket #<span id="ticketFolio"></span></h3>
-    <div class="hint" id="ticketPreviewText" style="white-space:pre-wrap; font-family:monospace; font-size:12.5px; background:var(--surface-2); padding:12px; border-radius:8px; line-height:1.6;"></div>
-    <div style="display:flex; gap:10px; margin-top:14px; flex-wrap:wrap;">
-      <button class="btn primary" id="sendTicketBtn">📤 Enviar ticket por WhatsApp</button>
+
+  <!-- ── Registrar ── -->
+  <button class="btn primary venta-registrar-btn" id="registrarVentaBtn">✓ Registrar pedido</button>
+  <div class="hint" id="ventaError" style="color:var(--danger); margin-top:8px;"></div>
+
+  <!-- ── Ticket ── -->
+  <div class="venta-ticket-panel" id="ticketPanel" style="display:none;">
+    <div class="venta-ticket-header">
+      <span class="venta-ticket-icon">✅</span>
+      <div>
+        <div class="venta-ticket-title">¡Pedido registrado!</div>
+        <div class="venta-ticket-folio">Ticket #<span id="ticketFolio"></span></div>
+      </div>
+    </div>
+    <pre class="venta-ticket-pre" id="ticketPreviewText"></pre>
+    <div class="venta-ticket-actions">
+      <button class="btn primary" id="sendTicketBtn">📤 Enviar por WhatsApp</button>
       <button class="btn" id="copyTicketBtn">Copiar texto</button>
     </div>
   </div>
+
 </section>
 
 <!-- ================= REGISTRAR COMPRA ================= -->

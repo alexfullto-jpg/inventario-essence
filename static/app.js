@@ -1053,6 +1053,24 @@ function updateVentaDescuentoPreview() {
     previewEl.textContent = '';
   }
 }
+// Botones de tamaño visual
+document.querySelectorAll('.venta-tam-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.venta-tam-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('ventaTamano').value = btn.getAttribute('data-tam');
+    currentVentaMatch();
+  });
+});
+// Qty +/-
+document.getElementById('ventaQtyMinus').addEventListener('click', () => {
+  const el = document.getElementById('ventaCantidad');
+  if (Number(el.value) > 1) el.value = Number(el.value) - 1;
+});
+document.getElementById('ventaQtyPlus').addEventListener('click', () => {
+  const el = document.getElementById('ventaCantidad');
+  el.value = Number(el.value) + 1;
+});
 document.getElementById('ventaFraganciaSearch').addEventListener('input', currentVentaMatch);
 document.getElementById('ventaTamano').addEventListener('change', currentVentaMatch);
 document.getElementById('ventaRecargaCheckbox').addEventListener('change', currentVentaMatch);
@@ -1093,28 +1111,65 @@ document.getElementById('addItemToCartBtn').addEventListener('click', () => {
 
 function renderVentaCart() {
   document.getElementById('cartItemCount').textContent = cart.length;
-  const tbody = document.getElementById('ventaCartTbody');
-  tbody.innerHTML = cart.length === 0
-    ? '<tr><td colspan="6"><div class="empty-note">Aún no has agregado productos a este pedido.</div></td></tr>'
-    : cart.map((item, idx) => `
-      <tr>
-        <td>${escapeHtml(item.nombre)} <span class="hint" style="margin:0;">Ref. ${item.codigo}</span>${item.esRecarga ? ' <span class="tag" style="background:rgba(79,123,127,0.2); color:var(--teal); border:1px solid rgba(79,123,127,0.4);">🔄 Recarga</span>' : ''}${item.descuentoPct ? ` <span class="tag" style="background:rgba(201,162,39,0.2); color:var(--gold-soft); border:1px solid rgba(201,162,39,0.4);">-${item.descuentoPct}%</span>` : ''}</td>
-        <td>${item.tamano}ML</td><td>${item.cantidad}</td>
-        <td>${item.descuentoPct ? `<span style="text-decoration:line-through; color:var(--muted); font-size:11px; display:block;">${fmtCOP(item.precioOriginal)}</span>${fmtCOP(item.precioUnit)}` : fmtCOP(item.precioUnit)}</td>
-        <td>${fmtCOP(item.subtotal)}</td>
-        <td><button class="btn small danger" data-idx="${idx}">Quitar</button></td>
-      </tr>`).join('');
+  const wrap = document.getElementById('ventaCartItems');
+
+  if (cart.length === 0) {
+    wrap.innerHTML = '<div class="empty-note">Agrega productos para armar el pedido.</div>';
+  } else {
+    wrap.innerHTML = cart.map((item, idx) => `
+      <div class="vc-item" style="animation-delay:${idx * 50}ms">
+        <div class="vc-item-left">
+          <div class="vc-item-tam">${item.tamano}<span>ML</span></div>
+        </div>
+        <div class="vc-item-body">
+          <div class="vc-item-nombre">${escapeHtml(item.nombre)}</div>
+          <div class="vc-item-meta">
+            Ref. ${item.codigo}
+            ${item.esRecarga ? '<span class="vc-badge vc-badge-teal">🔄 Recarga</span>' : ''}
+            ${item.descuentoPct ? `<span class="vc-badge vc-badge-gold">−${item.descuentoPct}%</span>` : ''}
+          </div>
+          <div class="vc-item-qty-row">
+            <button class="vc-qty-btn" data-dec="${idx}">−</button>
+            <span class="vc-qty-val">${item.cantidad}</span>
+            <button class="vc-qty-btn" data-inc="${idx}">+</button>
+            <span class="vc-item-precio">
+              ${item.descuentoPct
+                ? `<s class="vc-precio-old">${fmtCOP(item.precioOriginal)}</s> ${fmtCOP(item.precioUnit)}`
+                : fmtCOP(item.precioUnit)} c/u
+            </span>
+          </div>
+        </div>
+        <div class="vc-item-right">
+          <div class="vc-item-subtotal">${fmtCOP(item.subtotal)}</div>
+          <button class="vc-remove-btn" data-idx="${idx}">✕</button>
+        </div>
+      </div>`).join('');
+  }
 
   const grandTotal = cart.reduce((s, i) => s + i.subtotal, 0);
   document.getElementById('cartGrandTotal').textContent = fmtCOP(grandTotal);
   updateVentaPreview();
 }
-document.getElementById('ventaCartTbody').addEventListener('click', (e) => {
-  const btn = e.target.closest('button[data-idx]');
-  if (!btn) return;
-  cart.splice(Number(btn.getAttribute('data-idx')), 1);
-  renderVentaCart();
+
+document.getElementById('ventaCartItems').addEventListener('click', (e) => {
+  const rmBtn  = e.target.closest('[data-idx]');
+  const decBtn = e.target.closest('[data-dec]');
+  const incBtn = e.target.closest('[data-inc]');
+  if (rmBtn)  { cart.splice(Number(rmBtn.getAttribute('data-idx')), 1); renderVentaCart(); return; }
+  if (decBtn) {
+    const i = Number(decBtn.getAttribute('data-dec'));
+    if (cart[i].cantidad > 1) { cart[i].cantidad--; cart[i].subtotal = cart[i].precioUnit * cart[i].cantidad; renderVentaCart(); }
+    return;
+  }
+  if (incBtn) {
+    const i = Number(incBtn.getAttribute('data-inc'));
+    cart[i].cantidad++; cart[i].subtotal = cart[i].precioUnit * cart[i].cantidad; renderVentaCart();
+    return;
+  }
 });
+
+// Compat: listener viejo en tbody oculto (no hace nada, pero evita errores)
+document.getElementById('ventaCartTbody').addEventListener('click', () => {});
 
 function updateVentaPreview() {
   const previewEl = document.getElementById('ventaPreview');
