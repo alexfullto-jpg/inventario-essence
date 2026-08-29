@@ -205,6 +205,9 @@ function renderDashboard() {
 
   const utilidadTotal = DATA.ventas.reduce((s, v) => s + utilidadDeVenta(v), 0);
   const gastosTotal = DATA.gastos.reduce((s, g) => s + g.monto, 0);
+  // Ganancia real = utilidad neta del mes / unidades vendidas
+  const gananciaPorUnidad = unidadesMes > 0 ? utilidadNetaMes / unidadesMes : 0;
+  const margenNeto = margenPct(ingresosMes, utilidadNetaMes);
   const porCobrar = DATA.facturas.reduce((s, f) => s + f.saldo, 0);
   const atrasadas = DATA.facturas.filter(f => f.saldo > 0 && diasDesde(f.fecha) > 15).length;
 
@@ -226,11 +229,19 @@ function renderDashboard() {
       <div class="kpi-icon">📈</div>
       <div class="label">Utilidad neta del mes</div>
       <div class="value">${fmtCOP(utilidadNetaMes)}</div>
+      <div class="kpi-sub">ingresos − producción − gastos</div>
     </div>
-    <div class="kpi ${margenMes >= 30 ? 'ok' : (margenMes >= 0 ? 'warn' : 'danger')}">
+    <div class="kpi ${gananciaPorUnidad >= 0 ? 'ok' : 'danger'}">
+      <div class="kpi-icon">🧴</div>
+      <div class="label">Ganancia real / unidad</div>
+      <div class="value">${fmtCOP(Math.round(gananciaPorUnidad))}</div>
+      <div class="kpi-sub">lo que te queda por frasco</div>
+    </div>
+    <div class="kpi ${margenNeto >= 30 ? 'ok' : (margenNeto >= 0 ? 'warn' : 'danger')}">
       <div class="kpi-icon">%</div>
-      <div class="label">Margen este mes</div>
-      <div class="value">${margenMes.toFixed(1)}%</div>
+      <div class="label">Margen neto real</div>
+      <div class="value">${margenNeto.toFixed(1)}%</div>
+      <div class="kpi-sub">sobre ingresos totales</div>
     </div>
     <div class="kpi">
       <div class="kpi-icon">💸</div>
@@ -344,62 +355,104 @@ const CHART_DEFAULTS = {
   },
 };
 
-// ─── VENTAS POR MES (Line chart con área) ─────────────────────────────────
+// ─── VENTAS POR MES (Line chart con área — 2 líneas: ingresos vs ganancia real) ──
 function renderChartVentasMes() {
-  const porMes = {};
+  const porMes   = {};
+  const costoMes = {};
+  const gastosMesMap = {};
+
   DATA.ventas.forEach(v => {
     const ym = v.fecha.slice(0, 7);
-    porMes[ym] = (porMes[ym] || 0) + v.total;
+    porMes[ym]   = (porMes[ym]   || 0) + v.total;
+    costoMes[ym] = (costoMes[ym] || 0) + costoDeVenta(v);
   });
+  DATA.gastos.forEach(g => {
+    const ym = g.fecha.slice(0, 7);
+    gastosMesMap[ym] = (gastosMesMap[ym] || 0) + g.monto;
+  });
+
   const meses  = Object.keys(porMes).sort().slice(-8);
   const labels = meses.map(m => {
     const [y, mo] = m.split('-');
     const names = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
     return `${names[parseInt(mo)-1]} ${y.slice(2)}`;
   });
-  const values = meses.map(m => porMes[m]);
+  const ingresos  = meses.map(m => porMes[m]);
+  const ganancias = meses.map(m => Math.max(0, porMes[m] - costoMes[m] - (gastosMesMap[m] || 0)));
 
   const wrap = document.getElementById('chartVentasMes');
   if (meses.length === 0) {
     wrap.innerHTML = '<div class="empty-note">Aún no hay datos suficientes para graficar.</div>';
     return;
   }
-  wrap.innerHTML = '<div class="chart-wrap" style="height:220px"><canvas id="canvasVentasMes"></canvas></div>';
+  wrap.innerHTML = '<div class="chart-wrap" style="height:240px"><canvas id="canvasVentasMes"></canvas></div>';
   destroyChart('ventasMes');
 
   const ctx = document.getElementById('canvasVentasMes').getContext('2d');
 
-  // Gradiente de relleno
-  const grad = ctx.createLinearGradient(0, 0, 0, 220);
-  grad.addColorStop(0,   'rgba(201,162,39,0.22)');
-  grad.addColorStop(0.6, 'rgba(201,162,39,0.06)');
-  grad.addColorStop(1,   'rgba(201,162,39,0)');
+  const gradGold = ctx.createLinearGradient(0, 0, 0, 240);
+  gradGold.addColorStop(0,   'rgba(201,162,39,0.18)');
+  gradGold.addColorStop(1,   'rgba(201,162,39,0)');
+
+  const gradGreen = ctx.createLinearGradient(0, 0, 0, 240);
+  gradGreen.addColorStop(0,   'rgba(61,158,106,0.22)');
+  gradGreen.addColorStop(1,   'rgba(61,158,106,0)');
 
   _charts['ventasMes'] = new Chart(ctx, {
     type: 'line',
     data: {
       labels,
-      datasets: [{
-        data: values,
-        borderColor: CHART_GOLD,
-        borderWidth: 2.5,
-        pointBackgroundColor: CHART_GOLD,
-        pointBorderColor: '#1c1916',
-        pointBorderWidth: 2,
-        pointRadius: 5,
-        pointHoverRadius: 7,
-        fill: true,
-        backgroundColor: grad,
-        tension: 0.42,
-      }],
+      datasets: [
+        {
+          label: 'Ingresos',
+          data: ingresos,
+          borderColor: CHART_GOLD,
+          borderWidth: 2.5,
+          pointBackgroundColor: CHART_GOLD,
+          pointBorderColor: '#1c1916',
+          pointBorderWidth: 2,
+          pointRadius: 5,
+          pointHoverRadius: 7,
+          fill: true,
+          backgroundColor: gradGold,
+          tension: 0.42,
+        },
+        {
+          label: 'Ganancia real',
+          data: ganancias,
+          borderColor: CHART_OK,
+          borderWidth: 2.5,
+          pointBackgroundColor: CHART_OK,
+          pointBorderColor: '#1c1916',
+          pointBorderWidth: 2,
+          pointRadius: 5,
+          pointHoverRadius: 7,
+          fill: true,
+          backgroundColor: gradGreen,
+          tension: 0.42,
+          borderDash: [6, 3],
+        },
+      ],
     },
     options: {
       ...CHART_DEFAULTS,
       plugins: {
         ...CHART_DEFAULTS.plugins,
+        legend: {
+          display: true,
+          labels: {
+            color: CHART_MUTED,
+            font: { family: 'Space Grotesk, Inter, sans-serif', size: 11 },
+            boxWidth: 14,
+            padding: 16,
+            usePointStyle: true,
+          },
+        },
         tooltip: {
           ...CHART_DEFAULTS.plugins.tooltip,
-          callbacks: { label: ctx => ' ' + fmtCOP(ctx.parsed.y) },
+          callbacks: {
+            label: ctx => ` ${ctx.dataset.label}: ${fmtCOP(ctx.parsed.y)}`,
+          },
         },
       },
       scales: {

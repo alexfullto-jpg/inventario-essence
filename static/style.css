@@ -226,6 +226,15 @@ h1,h2,h3,.serif { font-family: var(--font-serif); }
 .kpi.warn .value { color: var(--warn); }
 .kpi.danger .value { color: var(--danger); }
 
+.kpi .kpi-sub {
+  font-size: 10px;
+  color: var(--muted-2);
+  margin-top: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  font-weight: 500;
+}
+
 .kpi .kpi-icon {
   position: absolute;
   top: 16px; right: 16px;
