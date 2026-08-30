@@ -170,6 +170,7 @@ function renderTab(tab) {
     if (tab === 'cuentas') renderCuentas();
     if (tab === 'caja') renderCaja();
     if (tab === 'historial') renderHistorial();
+    if (tab === 'reportes') renderReportes();
   } catch (err) {
     console.error('Error renderizando ' + tab + ':', err);
   }
@@ -2128,3 +2129,428 @@ document.getElementById('epCerrarBtn').addEventListener('click', () => {
       '<h2>No se pudo conectar con el servidor local</h2><p>Asegúrate de haber iniciado el programa (start.bat / start.command) y de no haber cerrado esa ventana.</p></div>';
   }
 })();
+
+// ============================================================
+// REPORTES Y MÉTRICAS PROFUNDAS
+// ============================================================
+function renderReportes() {
+  renderRepEjecutivo();
+  renderRepEvolucion();
+  renderRepCuentas();
+  renderRepRentabilidad();
+  renderRepClientes();
+  renderRepTamanos();
+  renderRepAlertas();
+  renderRepTablaFragancias();
+}
+
+// ── 1. RESUMEN EJECUTIVO ─────────────────────────────────────
+function renderRepEjecutivo() {
+  const hoy     = new Date();
+  const mesAct  = hoy.toISOString().slice(0, 7);
+  const mesAnt  = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1).toISOString().slice(0, 7);
+
+  function metricas(ym) {
+    const vs = DATA.ventas.filter(v => v.fecha.slice(0, 7) === ym);
+    const gs = DATA.gastos.filter(g => g.fecha.slice(0, 7) === ym);
+    const ingresos  = vs.reduce((s, v) => s + v.total, 0);
+    const costos    = vs.reduce((s, v) => s + costoDeVenta(v), 0);
+    const gastosTot = gs.reduce((s, g) => s + g.monto, 0);
+    const ganancia  = ingresos - costos - gastosTot;
+    const unidades  = vs.reduce((s, v) => s + v.cantidad, 0);
+    const margen    = ingresos > 0 ? ganancia / ingresos * 100 : 0;
+    return { ingresos, costos, gastosTot, ganancia, unidades, margen };
+  }
+
+  const act = metricas(mesAct);
+  const ant = metricas(mesAnt);
+
+  function flecha(a, b, dinero = true) {
+    if (b === 0) return '';
+    const pct = ((a - b) / Math.abs(b) * 100).toFixed(1);
+    const up   = a >= b;
+    const col  = up ? 'var(--ok)' : 'var(--danger)';
+    const sym  = up ? '▲' : '▼';
+    const val  = dinero ? fmtCOP(Math.abs(a - b)) : Math.abs(a - b);
+    return `<span style="font-size:11px;color:${col};display:block;margin-top:4px;">${sym} ${pct}% vs mes ant.</span>`;
+  }
+
+  document.getElementById('repEjecutivo').innerHTML = `
+    <div class="kpi ok">
+      <div class="kpi-icon">💰</div>
+      <div class="label">Ingresos este mes</div>
+      <div class="value">${fmtCOP(act.ingresos)}</div>
+      ${flecha(act.ingresos, ant.ingresos)}
+    </div>
+    <div class="kpi ${act.ganancia >= 0 ? 'ok' : 'danger'}">
+      <div class="kpi-icon">📈</div>
+      <div class="label">Ganancia real</div>
+      <div class="value">${fmtCOP(act.ganancia)}</div>
+      ${flecha(act.ganancia, ant.ganancia)}
+    </div>
+    <div class="kpi">
+      <div class="kpi-icon">🛒</div>
+      <div class="label">Unidades vendidas</div>
+      <div class="value">${act.unidades}</div>
+      ${flecha(act.unidades, ant.unidades, false)}
+    </div>
+    <div class="kpi ${act.margen >= 30 ? 'ok' : act.margen >= 0 ? 'warn' : 'danger'}">
+      <div class="kpi-icon">%</div>
+      <div class="label">Margen neto</div>
+      <div class="value">${act.margen.toFixed(1)}%</div>
+      ${flecha(act.margen, ant.margen, false)}
+    </div>
+    <div class="kpi">
+      <div class="kpi-icon">💸</div>
+      <div class="label">Gastos este mes</div>
+      <div class="value">${fmtCOP(act.gastosTot)}</div>
+      <div class="kpi-sub">Mes ant: ${fmtCOP(ant.gastosTot)}</div>
+    </div>`;
+}
+
+// ── 2. EVOLUCIÓN 12 MESES ────────────────────────────────────
+function renderRepEvolucion() {
+  destroyChart('repEvolucion');
+  const porMes = {};
+  DATA.ventas.forEach(v => {
+    const ym = v.fecha.slice(0, 7);
+    if (!porMes[ym]) porMes[ym] = { ing: 0, costo: 0, gastos: 0 };
+    porMes[ym].ing   += v.total;
+    porMes[ym].costo += costoDeVenta(v);
+  });
+  DATA.gastos.forEach(g => {
+    const ym = g.fecha.slice(0, 7);
+    if (!porMes[ym]) porMes[ym] = { ing: 0, costo: 0, gastos: 0 };
+    porMes[ym].gastos += g.monto;
+  });
+
+  const meses = Object.keys(porMes).sort().slice(-12);
+  const labels = meses.map(m => {
+    const [y, mo] = m.split('-');
+    const ns = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+    return ns[parseInt(mo)-1] + ' ' + y.slice(2);
+  });
+
+  const ingresos  = meses.map(m => porMes[m].ing);
+  const ganancias = meses.map(m => Math.max(0, porMes[m].ing - porMes[m].costo - porMes[m].gastos));
+  const gastos    = meses.map(m => porMes[m].gastos + porMes[m].costo);
+
+  const ctx = document.getElementById('repCanvasEvolucion').getContext('2d');
+  const gGold = ctx.createLinearGradient(0,0,0,260);
+  gGold.addColorStop(0,'rgba(201,162,39,0.15)'); gGold.addColorStop(1,'rgba(201,162,39,0)');
+  const gGreen = ctx.createLinearGradient(0,0,0,260);
+  gGreen.addColorStop(0,'rgba(61,158,106,0.18)'); gGreen.addColorStop(1,'rgba(61,158,106,0)');
+
+  _charts['repEvolucion'] = new Chart(ctx, {
+    type: 'line',
+    data: { labels, datasets: [
+      { label: 'Ingresos', data: ingresos, borderColor: CHART_GOLD, borderWidth: 2.5,
+        pointBackgroundColor: CHART_GOLD, pointBorderColor: '#1c1916', pointBorderWidth: 2,
+        pointRadius: 4, fill: true, backgroundColor: gGold, tension: 0.42 },
+      { label: 'Ganancia real', data: ganancias, borderColor: CHART_OK, borderWidth: 2.5,
+        pointBackgroundColor: CHART_OK, pointBorderColor: '#1c1916', pointBorderWidth: 2,
+        pointRadius: 4, fill: true, backgroundColor: gGreen, tension: 0.42, borderDash: [6,3] },
+      { label: 'Costos + gastos', data: gastos, borderColor: 'rgba(193,84,63,0.7)', borderWidth: 1.5,
+        pointRadius: 3, fill: false, tension: 0.42, borderDash: [3,3] },
+    ]},
+    options: { ...CHART_DEFAULTS,
+      plugins: { ...CHART_DEFAULTS.plugins,
+        legend: { display: true, labels: { color: CHART_MUTED,
+          font: { family: 'Space Grotesk, Inter, sans-serif', size: 11 },
+          boxWidth: 12, padding: 14, usePointStyle: true } },
+        tooltip: { ...CHART_DEFAULTS.plugins.tooltip,
+          callbacks: { label: c => ` ${c.dataset.label}: ${fmtCOP(c.parsed.y)}` } } },
+      scales: { x: { ...CHART_DEFAULTS.scales.x },
+        y: { ...CHART_DEFAULTS.scales.y, ticks: { ...CHART_DEFAULTS.scales.y.ticks,
+          callback: v => v >= 1000000 ? '$'+(v/1000000).toFixed(1)+'M' : v >= 1000 ? '$'+(v/1000).toFixed(0)+'k' : '$'+v } } } }
+  });
+}
+
+// ── 3. INGRESOS POR CUENTA ───────────────────────────────────
+function renderRepCuentas() {
+  destroyChart('repCuentas');
+  const cuentaMap = {};
+  DATA.ventas.forEach(v => {
+    // ventas sin cuenta asignada van a "Efectivo"
+  });
+  // Usamos historial de abonos + ventas directas (no fiadas)
+  const hist = DATA.ventas;
+  // Agrupamos por cuenta usando facturas abonos y ventas directas
+  const porCuenta = {};
+  // Ventas directas — la cuenta está en la factura; si no hay factura = venta directa
+  // Como no tenemos cuenta por venta individual, usamos abonos y sumamos por cuenta
+  DATA.facturas.forEach(f => {
+    f.abonos.forEach(a => {
+      porCuenta[a.cuenta] = (porCuenta[a.cuenta] || 0) + a.monto;
+    });
+  });
+  // También gastos por cuenta (en negativo) no aplica aquí; solo ingresos
+  if (Object.keys(porCuenta).length === 0) {
+    document.getElementById('repCanvasCuentas').parentElement.innerHTML =
+      '<div class="empty-note">Sin abonos registrados aún.</div>';
+    return;
+  }
+
+  const labels = Object.keys(porCuenta);
+  const values = labels.map(k => porCuenta[k]);
+  const PALETTE = ['rgba(201,162,39,0.85)','rgba(61,158,106,0.85)','rgba(79,123,127,0.85)',
+    'rgba(209,143,63,0.85)','rgba(193,84,63,0.85)','rgba(150,120,80,0.85)'];
+
+  const ctx = document.getElementById('repCanvasCuentas').getContext('2d');
+  _charts['repCuentas'] = new Chart(ctx, {
+    type: 'doughnut',
+    data: { labels, datasets: [{ data: values,
+      backgroundColor: PALETTE.slice(0, labels.length),
+      borderColor: '#0d0b0a', borderWidth: 3, hoverOffset: 10 }] },
+    options: { ...CHART_DEFAULTS,
+      cutout: '65%',
+      plugins: { ...CHART_DEFAULTS.plugins,
+        legend: { display: true, position: 'right',
+          labels: { color: CHART_MUTED, font: { family: 'Space Grotesk, Inter, sans-serif', size: 11 },
+            boxWidth: 12, padding: 14, usePointStyle: true } },
+        tooltip: { ...CHART_DEFAULTS.plugins.tooltip,
+          callbacks: { label: c => ` ${c.label}: ${fmtCOP(c.parsed)}` } } },
+      scales: { x: { display: false }, y: { display: false } } }
+  });
+}
+
+// ── 4. FRAGANCIAS MÁS RENTABLES ─────────────────────────────
+function renderRepRentabilidad() {
+  destroyChart('repRentabilidad');
+  const fragMap = {};
+  DATA.ventas.forEach(v => {
+    if (!fragMap[v.codigo]) fragMap[v.codigo] = { nombre: v.nombre, ganancia: 0, ingresos: 0, unidades: 0 };
+    const gan = utilidadDeVenta(v);
+    fragMap[v.codigo].ganancia  += gan;
+    fragMap[v.codigo].ingresos  += v.total;
+    fragMap[v.codigo].unidades  += v.cantidad;
+  });
+
+  const sorted = Object.values(fragMap).sort((a,b) => b.ganancia - a.ganancia).slice(0, 10);
+  if (sorted.length === 0) {
+    document.getElementById('repCanvasRentabilidad').parentElement.innerHTML = '<div class="empty-note">Sin ventas registradas aún.</div>';
+    return;
+  }
+
+  const labels = sorted.map(f => f.nombre.length > 22 ? f.nombre.slice(0,22)+'…' : f.nombre);
+  const values = sorted.map(f => f.ganancia);
+  const max = Math.max(...values, 1);
+  const colors = values.map(v => {
+    const p = v / max;
+    return p > 0.75 ? 'rgba(201,162,39,0.95)' : p > 0.45 ? 'rgba(201,162,39,0.70)' : 'rgba(201,162,39,0.45)';
+  });
+
+  const ctx = document.getElementById('repCanvasRentabilidad').getContext('2d');
+  _charts['repRentabilidad'] = new Chart(ctx, {
+    type: 'bar', indexAxis: 'y',
+    data: { labels, datasets: [{ data: values, backgroundColor: colors,
+      borderColor: 'transparent', borderRadius: 6, borderSkipped: false }] },
+    options: { ...CHART_DEFAULTS,
+      plugins: { ...CHART_DEFAULTS.plugins,
+        tooltip: { ...CHART_DEFAULTS.plugins.tooltip,
+          callbacks: { label: c => ` Ganancia: ${fmtCOP(c.parsed.x)}` } } },
+      scales: { x: { ...CHART_DEFAULTS.scales.x, ticks: { ...CHART_DEFAULTS.scales.x.ticks,
+        callback: v => v >= 1000000 ? '$'+(v/1000000).toFixed(1)+'M' : '$'+(v/1000).toFixed(0)+'k' } },
+        y: { ...CHART_DEFAULTS.scales.y } } }
+  });
+}
+
+// ── 5. TOP CLIENTES ──────────────────────────────────────────
+function renderRepClientes() {
+  destroyChart('repClientes');
+  const clienteMap = {};
+  DATA.ventas.forEach(v => {
+    const cl = v.cliente || '(Sin nombre)';
+    if (!clienteMap[cl]) clienteMap[cl] = { ingresos: 0, unidades: 0, compras: 0 };
+    clienteMap[cl].ingresos  += v.total;
+    clienteMap[cl].unidades  += v.cantidad;
+    clienteMap[cl].compras++;
+  });
+
+  const sorted = Object.entries(clienteMap)
+    .filter(([k]) => k !== '(Sin nombre)')
+    .sort((a,b) => b[1].ingresos - a[1].ingresos)
+    .slice(0, 10);
+
+  if (sorted.length === 0) {
+    document.getElementById('repCanvasClientes').parentElement.innerHTML = '<div class="empty-note">No hay ventas con clientes registrados.</div>';
+    return;
+  }
+
+  const labels = sorted.map(([k]) => k.length > 18 ? k.slice(0,18)+'…' : k);
+  const values = sorted.map(([,v]) => v.ingresos);
+  const PALETTE = ['rgba(201,162,39,0.9)','rgba(61,158,106,0.85)','rgba(79,123,127,0.85)',
+    'rgba(209,143,63,0.8)','rgba(150,120,200,0.8)','rgba(180,140,80,0.75)',
+    'rgba(100,160,140,0.75)','rgba(220,120,80,0.75)','rgba(160,100,140,0.75)','rgba(120,160,100,0.75)'];
+
+  const ctx = document.getElementById('repCanvasClientes').getContext('2d');
+  _charts['repClientes'] = new Chart(ctx, {
+    type: 'bar', indexAxis: 'y',
+    data: { labels, datasets: [{ data: values,
+      backgroundColor: PALETTE.slice(0, sorted.length),
+      borderColor: 'transparent', borderRadius: 6, borderSkipped: false }] },
+    options: { ...CHART_DEFAULTS,
+      plugins: { ...CHART_DEFAULTS.plugins,
+        tooltip: { ...CHART_DEFAULTS.plugins.tooltip,
+          callbacks: { label: c => ` ${fmtCOP(c.parsed.x)}` } } },
+      scales: { x: { ...CHART_DEFAULTS.scales.x, ticks: { ...CHART_DEFAULTS.scales.x.ticks,
+        callback: v => '$'+(v/1000).toFixed(0)+'k' } },
+        y: { ...CHART_DEFAULTS.scales.y } } }
+  });
+}
+
+// ── 6. RENTABILIDAD POR TAMAÑO 6 MESES ──────────────────────
+function renderRepTamanos() {
+  destroyChart('repTamanos');
+  const mesesRaw = {};
+  DATA.ventas.forEach(v => {
+    const ym = v.fecha.slice(0, 7);
+    if (!mesesRaw[ym]) mesesRaw[ym] = { 10: 0, 30: 0, 50: 0 };
+    mesesRaw[ym][v.tamano] = (mesesRaw[ym][v.tamano] || 0) + utilidadDeVenta(v);
+  });
+
+  const meses = Object.keys(mesesRaw).sort().slice(-6);
+  const labels = meses.map(m => {
+    const [y, mo] = m.split('-');
+    const ns = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+    return ns[parseInt(mo)-1] + ' ' + y.slice(2);
+  });
+
+  const ctx = document.getElementById('repCanvasTamanos').getContext('2d');
+  _charts['repTamanos'] = new Chart(ctx, {
+    type: 'bar',
+    data: { labels, datasets: [
+      { label: '10 ML', data: meses.map(m => mesesRaw[m][10] || 0),
+        backgroundColor: 'rgba(201,162,39,0.55)', borderColor: 'transparent', borderRadius: 4 },
+      { label: '30 ML', data: meses.map(m => mesesRaw[m][30] || 0),
+        backgroundColor: 'rgba(201,162,39,0.85)', borderColor: 'transparent', borderRadius: 4 },
+      { label: '50 ML', data: meses.map(m => mesesRaw[m][50] || 0),
+        backgroundColor: 'rgba(232,201,116,0.90)', borderColor: 'transparent', borderRadius: 4 },
+    ]},
+    options: { ...CHART_DEFAULTS,
+      plugins: { ...CHART_DEFAULTS.plugins,
+        legend: { display: true, labels: { color: CHART_MUTED,
+          font: { family: 'Space Grotesk, Inter, sans-serif', size: 11 },
+          boxWidth: 12, padding: 14, usePointStyle: true } },
+        tooltip: { ...CHART_DEFAULTS.plugins.tooltip,
+          callbacks: { label: c => ` ${c.dataset.label}: ${fmtCOP(c.parsed.y)}` } } },
+      scales: { x: { ...CHART_DEFAULTS.scales.x, stacked: false },
+        y: { ...CHART_DEFAULTS.scales.y, stacked: false,
+          ticks: { ...CHART_DEFAULTS.scales.y.ticks,
+            callback: v => '$'+(v/1000).toFixed(0)+'k' } } } }
+  });
+}
+
+// ── 7. ALERTAS INTELIGENTES ──────────────────────────────────
+function renderRepAlertas() {
+  const alertas = [];
+  const hoy = new Date();
+  const hace30 = new Date(hoy); hace30.setDate(hace30.getDate() - 30);
+  const hace30Str = hace30.toISOString().slice(0, 10);
+  const mesAct = hoy.toISOString().slice(0, 7);
+  const mesAnt = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1).toISOString().slice(0, 7);
+
+  // A. Fragancias con stock pero sin ventas en 30 días
+  DATA.fragancias.forEach(f => {
+    if (f.stock_gr <= 0) return;
+    const vendida = DATA.ventas.some(v => v.codigo === f.codigo && v.fecha >= hace30Str);
+    if (!vendida) alertas.push({ tipo: 'warn', msg: `<b>${escapeHtml(f.nombre)}</b> tiene ${fmtGr(f.stock_gr)} en stock pero no se ha vendido en 30+ días.` });
+  });
+
+  // B. Clientes con facturas atrasadas >15 días
+  const clientesAtrasados = new Set();
+  DATA.facturas.forEach(f => {
+    if (f.saldo > 0 && diasDesde(f.fecha) > 15 && f.cliente) clientesAtrasados.add(f.cliente);
+  });
+  clientesAtrasados.forEach(cl => {
+    const deuda = DATA.facturas.filter(f => f.cliente === cl && f.saldo > 0).reduce((s,f) => s+f.saldo, 0);
+    alertas.push({ tipo: 'danger', msg: `<b>${escapeHtml(cl)}</b> tiene deuda atrasada de <b>${fmtCOP(deuda)}</b> (más de 15 días).` });
+  });
+
+  // C. Margen bajo este mes (<20%)
+  const venMes = DATA.ventas.filter(v => v.fecha.slice(0,7) === mesAct);
+  const ingMes = venMes.reduce((s,v) => s+v.total, 0);
+  const costoMes = venMes.reduce((s,v) => s+costoDeVenta(v), 0);
+  const gasMes = DATA.gastos.filter(g => g.fecha.slice(0,7) === mesAct).reduce((s,g) => s+g.monto, 0);
+  const margenMesRep = ingMes > 0 ? (ingMes - costoMes - gasMes) / ingMes * 100 : 0;
+  if (ingMes > 0 && margenMesRep < 20) {
+    alertas.push({ tipo: 'danger', msg: `El margen neto de este mes es <b>${margenMesRep.toFixed(1)}%</b> — por debajo del 20%. Revisá costos o precios.` });
+  }
+
+  // D. Caída de ventas vs mes anterior >20%
+  const ingAnt = DATA.ventas.filter(v => v.fecha.slice(0,7) === mesAnt).reduce((s,v) => s+v.total, 0);
+  if (ingAnt > 0 && ingMes < ingAnt * 0.8) {
+    const caida = ((ingAnt - ingMes) / ingAnt * 100).toFixed(1);
+    alertas.push({ tipo: 'warn', msg: `Los ingresos de este mes cayeron un <b>${caida}%</b> vs el mes anterior (${fmtCOP(ingAnt)} → ${fmtCOP(ingMes)}).` });
+  }
+
+  // E. Fragancia con stock bajo (<5g)
+  DATA.fragancias.forEach(f => {
+    if (f.stock_gr > 0 && f.stock_gr < 5) {
+      alertas.push({ tipo: 'danger', msg: `<b>${escapeHtml(f.nombre)}</b> tiene solo <b>${fmtGr(f.stock_gr)}</b> — stock crítico.` });
+    }
+  });
+
+  const wrap = document.getElementById('repAlertas');
+  if (alertas.length === 0) {
+    wrap.innerHTML = '<div class="rep-alerta rep-alerta-ok">✅ Todo en orden — no hay alertas activas en este momento.</div>';
+    return;
+  }
+  wrap.innerHTML = alertas.map(a =>
+    `<div class="rep-alerta rep-alerta-${a.tipo}">
+      <span class="rep-alerta-ico">${a.tipo === 'danger' ? '🔴' : '🟡'}</span>
+      <span>${a.msg}</span>
+    </div>`
+  ).join('');
+}
+
+// ── 8. TABLA DETALLE FRAGANCIAS ──────────────────────────────
+function renderRepTablaFragancias() {
+  const fragMap = {};
+  DATA.ventas.forEach(v => {
+    if (!fragMap[v.codigo]) {
+      const frag = DATA.fragancias.find(f => f.codigo === v.codigo);
+      fragMap[v.codigo] = { nombre: v.nombre, codigo: v.codigo,
+        genero: frag ? frag.genero : '—',
+        unidades: 0, ingresos: 0, costos: 0, ganancia: 0,
+        reciente: 0, antiguo: 0 };
+    }
+    const hoy = new Date().toISOString().slice(0,7);
+    const mesAnt = new Date(new Date().getFullYear(), new Date().getMonth()-1, 1).toISOString().slice(0,7);
+    const ym = v.fecha.slice(0,7);
+    fragMap[v.codigo].unidades += v.cantidad;
+    fragMap[v.codigo].ingresos += v.total;
+    const c = costoDeVenta(v);
+    fragMap[v.codigo].costos   += c;
+    fragMap[v.codigo].ganancia += v.total - c;
+    if (ym === hoy) fragMap[v.codigo].reciente += v.cantidad;
+    if (ym === mesAnt) fragMap[v.codigo].antiguo += v.cantidad;
+  });
+
+  const sorted = Object.values(fragMap).sort((a,b) => b.ganancia - a.ganancia);
+  const tbody = document.getElementById('repTablaFraganciasTbody');
+  if (sorted.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="9"><div class="empty-note">Sin ventas aún.</div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = sorted.map((f, idx) => {
+    const margen = f.ingresos > 0 ? (f.ganancia / f.ingresos * 100).toFixed(1) : '0.0';
+    const margenClass = Number(margen) >= 40 ? 'ok' : Number(margen) >= 20 ? 'warn' : 'danger';
+    let tendencia = '—';
+    if (f.reciente > f.antiguo * 1.1) tendencia = '<span style="color:var(--ok)">▲ Subiendo</span>';
+    else if (f.reciente < f.antiguo * 0.9) tendencia = '<span style="color:var(--danger)">▼ Bajando</span>';
+    else if (f.reciente > 0 || f.antiguo > 0) tendencia = '<span style="color:var(--muted)">→ Estable</span>';
+    const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : '';
+    return `<tr>
+      <td style="color:var(--muted-2);font-size:11px">${f.codigo}</td>
+      <td><span style="color:var(--ivory);font-weight:600">${medal} ${escapeHtml(f.nombre)}</span></td>
+      <td><span class="tag" style="background:rgba(79,123,127,0.15);color:var(--teal);border:1px solid rgba(79,123,127,0.3);font-size:10px">${escapeHtml(f.genero)}</span></td>
+      <td style="text-align:center;font-weight:700">${f.unidades}</td>
+      <td style="color:var(--gold-soft)">${fmtCOP(f.ingresos)}</td>
+      <td style="color:var(--muted)">${fmtCOP(f.costos)}</td>
+      <td style="color:var(--ok);font-weight:700">${fmtCOP(f.ganancia)}</td>
+      <td><span class="tag ${margenClass}">${margen}%</span></td>
+      <td>${tendencia}</td>
+    </tr>`;
+  }).join('');
+}

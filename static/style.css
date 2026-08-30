@@ -1012,3 +1012,54 @@ input.cell-input:focus { border-color: var(--gold); }
   margin: 0 0 16px;
 }
 .venta-ticket-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+
+/* ══════════════════════════════════════════════════
+   REPORTES
+   ══════════════════════════════════════════════════ */
+.rep-section-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+  margin: 24px 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.rep-section-label::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+
+/* alertas */
+.rep-alerta {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 18px;
+  border-radius: var(--radius-sm);
+  margin-bottom: 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  animation: fadeIn 0.3s ease;
+}
+.rep-alerta-ok {
+  background: rgba(61,158,106,0.08);
+  border: 1px solid rgba(61,158,106,0.25);
+  color: var(--ok);
+}
+.rep-alerta-warn {
+  background: rgba(209,143,63,0.08);
+  border: 1px solid rgba(209,143,63,0.25);
+  color: var(--ivory);
+}
+.rep-alerta-danger {
+  background: rgba(193,84,63,0.08);
+  border: 1px solid rgba(193,84,63,0.3);
+  color: var(--ivory);
+  animation: pulseDanger 3s ease-in-out infinite;
+}
+.rep-alerta-ico { font-size: 16px; flex-shrink: 0; margin-top: 1px; }

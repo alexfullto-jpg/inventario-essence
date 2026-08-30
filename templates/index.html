@@ -28,6 +28,7 @@
   <button class="tab-btn" data-tab="cuentas">Cuentas por cobrar</button>
   <button class="tab-btn" data-tab="caja">Mis cuentas</button>
   <button class="tab-btn" data-tab="historial">Historial</button>
+  <button class="tab-btn" data-tab="reportes">📊 Reportes</button>
 </nav>
 
 <!-- ================= DASHBOARD ================= -->
@@ -606,6 +607,72 @@
     </div>
     <div class="hint" id="importExcelStockStatus" style="margin-top:8px;"></div>
   </div>
+</section>
+
+<!-- ================= REPORTES ================= -->
+<section class="tab-content" id="tab-reportes">
+
+  <!-- Resumen ejecutivo -->
+  <div class="rep-section-label">📋 Resumen ejecutivo</div>
+  <div id="repEjecutivo" class="kpi-grid" style="margin-bottom:20px;"></div>
+
+  <!-- Fila 1: evolución + desglose por cuenta -->
+  <div class="two-col" style="margin-bottom:18px;">
+    <div class="card">
+      <h3>📈 Evolución 12 meses</h3>
+      <p class="sub">Ingresos, ganancia real y gastos</p>
+      <div class="chart-wrap" style="height:260px"><canvas id="repCanvasEvolucion"></canvas></div>
+    </div>
+    <div class="card">
+      <h3>💳 Ingresos por cuenta de pago</h3>
+      <p class="sub">Acumulado histórico</p>
+      <div class="chart-wrap" style="height:260px"><canvas id="repCanvasCuentas"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Fila 2: rentabilidad fragancias + top clientes -->
+  <div class="two-col" style="margin-bottom:18px;">
+    <div class="card">
+      <h3>🧴 Fragancias más rentables</h3>
+      <p class="sub">Por ganancia neta generada (no solo unidades)</p>
+      <div class="chart-wrap" style="height:280px"><canvas id="repCanvasRentabilidad"></canvas></div>
+    </div>
+    <div class="card">
+      <h3>👤 Top clientes</h3>
+      <p class="sub">Por ingresos totales históricos</p>
+      <div class="chart-wrap" style="height:280px"><canvas id="repCanvasClientes"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Fila 3: análisis por tamaño histórico -->
+  <div class="card" style="margin-bottom:18px;">
+    <h3>📦 Rentabilidad por tamaño — últimos 6 meses</h3>
+    <p class="sub">Ganancia real generada por cada presentación</p>
+    <div class="chart-wrap" style="height:220px"><canvas id="repCanvasTamanos"></canvas></div>
+  </div>
+
+  <!-- Alertas inteligentes -->
+  <div class="rep-section-label">⚠️ Alertas inteligentes</div>
+  <div id="repAlertas" style="margin-bottom:20px;"></div>
+
+  <!-- Tabla detalle fragancias -->
+  <div class="card">
+    <h3>🔬 Detalle por fragancia</h3>
+    <p class="sub">Rentabilidad, unidades, ingresos y margen de cada referencia</p>
+    <div class="table-wrap" style="max-height:420px;">
+      <table id="repTablaFragancias">
+        <thead>
+          <tr>
+            <th>Ref.</th><th>Fragancia</th><th>Género</th>
+            <th>Unidades</th><th>Ingresos</th><th>Costo prod.</th>
+            <th>Ganancia</th><th>Margen</th><th>Tendencia</th>
+          </tr>
+        </thead>
+        <tbody id="repTablaFraganciasTbody"></tbody>
+      </table>
+    </div>
+  </div>
+
 </section>
 
 <!-- DELETE CONFIRM MODAL -->
