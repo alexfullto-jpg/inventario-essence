@@ -386,6 +386,37 @@ def api_fragancia_import_excel():
 
 
 # ---------------------------------------------------------------------------
+# Inventario: fragancias — eliminar
+# ---------------------------------------------------------------------------
+
+@app.route("/api/fragancia/<codigo>", methods=["DELETE"])
+def api_fragancia_delete(codigo):
+    conn = db.get_conn()
+    try:
+        f = get_fragancia(conn, codigo)
+        if not f:
+            return error_response("Esa fragancia no existe.", 404)
+        # Bloquear si tiene ventas registradas para no dejar historial huérfano
+        ventas_count = conn.execute(
+            "SELECT COUNT(*) AS c FROM ventas WHERE codigo = ?", (str(codigo),)
+        ).fetchone()["c"]
+        if ventas_count > 0:
+            return error_response(
+                f"No se puede eliminar '{f['nombre']}' porque tiene {ventas_count} venta(s) "
+                "registrada(s). Si de todas formas quieres quitarla, primero borra esas ventas "
+                "desde Historial.", 409
+            )
+        conn.execute("DELETE FROM fragancias WHERE codigo = ?", (str(codigo),))
+        conn.commit()
+        return jsonify({"ok": True})
+    except Exception as e:
+        conn.rollback()
+        return error_response(f"No se pudo eliminar la fragancia: {e}", 500)
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
 # Inventario: otros productos (bolsas, etiquetas, etc.)
 # ---------------------------------------------------------------------------
 
