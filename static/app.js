@@ -864,6 +864,7 @@ function renderInventoryTable() {
       <td>${alcanzaPara(f)}</td>
       <td><input type="number" class="cell-input cost-input" value="${f.cost_per_gr}" data-codigo="${f.codigo}" style="width:70px;"></td>
       <td>${estadoTag(f)}</td>
+      <td><button class="btn small danger" data-delfrag="${f.codigo}" title="Eliminar fragancia">🗑️</button></td>
     </tr>`).join('');
 }
 
@@ -900,6 +901,17 @@ document.addEventListener('click', (e) => {
 });
 
 document.getElementById('inventorySearch').addEventListener('input', debounce(renderInventoryTable, 150));
+
+document.getElementById('inventoryTbody').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-delfrag]');
+  if (!btn) return;
+  const codigo = btn.getAttribute('data-delfrag');
+  const frag = DATA.fragancias.find(f => String(f.codigo) === String(codigo));
+  deleteTarget = { id: codigo, tipo: 'fragancia' };
+  document.getElementById('deleteMsg').textContent =
+    `Se eliminará "${frag ? frag.nombre : codigo}" del catálogo permanentemente. Solo es posible si no tiene ventas registradas.`;
+  document.getElementById('deleteOverlay').classList.add('open');
+});
 
 document.getElementById('inventoryTbody').addEventListener('change', (e) => runAction(async () => {
   const inp = e.target;
@@ -1927,11 +1939,21 @@ document.getElementById('confirmDeleteBtn').addEventListener('click', () => runA
   const tipo = deleteTarget.tipo;
   const path = tipo === 'venta' ? `/api/venta/${deleteTarget.id}`
     : tipo === 'abono' ? `/api/abono/${deleteTarget.id}`
+    : tipo === 'fragancia' ? `/api/fragancia/${encodeURIComponent(deleteTarget.id)}`
     : `/api/compra/${deleteTarget.id}`;
   await api(path, { method: 'DELETE' });
+  if (tipo === 'fragancia') {
+    DATA.fragancias = DATA.fragancias.filter(f => String(f.codigo) !== String(deleteTarget.id));
+    renderInventoryTable();
+    renderDashboard();
+  }
   deleteTarget = null;
   document.getElementById('deleteOverlay').classList.remove('open');
-  showToast(tipo === 'abono' ? 'Pago eliminado, la factura quedó pendiente' : 'Movimiento eliminado e inventario revertido');
+  showToast(
+    tipo === 'abono' ? 'Pago eliminado, la factura quedó pendiente' :
+    tipo === 'fragancia' ? 'Fragancia eliminada del catálogo' :
+    'Movimiento eliminado e inventario revertido'
+  );
 }));
 
 // ---------------------------------------------------------------------------
