@@ -81,6 +81,12 @@ def get_fragancia(conn, codigo):
     return row_to_dict(row) if row else None
 
 
+def es_terminado(f):
+    """Producto terminado (ej. Splash 250 ML): se compra hecho y se vende por unidad.
+    En la tabla fragancias, stock_gr guarda las UNIDADES y cost_per_gr el COSTO POR UNIDAD."""
+    return bool(f) and f.get("tipo") == "terminado"
+
+
 def saldo_factura(total, abonos):
     abonado = sum(a["monto"] for a in abonos)
     return max(0.0, round((total - abonado) * 100) / 100)
@@ -250,20 +256,25 @@ def api_fragancia_upsert_bulk():
             if not codigo:
                 continue
             existing = get_fragancia(conn, codigo)
+            p250 = float(item.get("p250") or 0)
+            p10 = float(item.get("p10", existing["p10"] if existing else 0) or 0)
+            p30 = float(item.get("p30", existing["p30"] if existing else 0) or 0)
+            p50 = float(item.get("p50", existing["p50"] if existing else 0) or 0)
+            # Si solo tiene precio de 250 ML es un producto terminado (Splash)
+            tipo = "terminado" if (p250 > 0 and p10 == 0 and p30 == 0 and p50 == 0) else "esencia"
             if existing:
                 conn.execute(
-                    "UPDATE fragancias SET nombre=?, genero=?, p10=?, p30=?, p50=? WHERE codigo=?",
+                    "UPDATE fragancias SET nombre=?, genero=?, p10=?, p30=?, p50=?, p250=?, tipo=? WHERE codigo=?",
                     (item.get("nombre", existing["nombre"]), item.get("genero", existing["genero"]),
-                     item.get("p10", existing["p10"]), item.get("p30", existing["p30"]),
-                     item.get("p50", existing["p50"]), codigo),
+                     p10, p30, p50, p250, tipo, codigo),
                 )
                 actualizadas += 1
             else:
                 conn.execute(
-                    "INSERT INTO fragancias (codigo, nombre, genero, p10, p30, p50, stock_gr, cost_per_gr, ubicacion) "
-                    "VALUES (?, ?, ?, ?, ?, ?, 0, 0, '')",
+                    "INSERT INTO fragancias (codigo, nombre, genero, p10, p30, p50, p250, tipo, stock_gr, cost_per_gr, ubicacion) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, '')",
                     (codigo, item.get("nombre", ""), item.get("genero", "Unisex"),
-                     item.get("p10", 0), item.get("p30", 0), item.get("p50", 0)),
+                     p10, p30, p50, p250, tipo),
                 )
                 nuevas += 1
         conn.commit()
@@ -518,12 +529,22 @@ def api_venta_create():
             f = get_fragancia(conn, codigo)
             if not f:
                 return error_response(f"La fragancia con referencia {codigo} no existe.")
-            frag_gr, alc_gr = recipe_for(tamano, frag_percent)
+            terminado = es_terminado(f)
+            if terminado:
+                if tamano != 250:
+                    return error_response(f"{f['nombre']} es un producto terminado y solo se vende en 250 ML.")
+                es_recarga = False
+                frag_gr, alc_gr = 1.0, 0.0   # 1 unidad por unidad vendida, sin alcohol ni frasco
+            else:
+                if tamano not in (10, 30, 50):
+                    return error_response("Tamaño inválido. Debe ser 10, 30 o 50.")
+                frag_gr, alc_gr = recipe_for(tamano, frag_percent)
             frag_needed[codigo] = frag_needed.get(codigo, 0) + frag_gr * cantidad
             alc_needed += alc_gr * cantidad
-            if not es_recarga:
+            if not es_recarga and not terminado:
                 frasco_needed[frasco_key(tamano)] += cantidad
             prepared.append({
+                "terminado": terminado,
                 "fragancia": f, "tamano": tamano, "cantidad": cantidad,
                 "precio_unit": precio_unit, "total": precio_unit * cantidad,
                 "precio_original": precio_original, "descuento_pct": descuento_pct,
@@ -557,10 +578,10 @@ def api_venta_create():
                 (venta_id, folio, fecha, f["codigo"], f["nombre"], p["tamano"], p["cantidad"],
                  p["precio_unit"], p["total"], p["frag_gr"], p["alc_gr"], cliente, cliente_tel,
                  1 if p["es_recarga"] else 0, f["cost_per_gr"], config["alcohol_cost_per_gr"],
-                 0 if p["es_recarga"] else config[f"{frasco_key(p['tamano'])}_cost"],
+                 0 if (p["es_recarga"] or p["terminado"]) else config[f"{frasco_key(p['tamano'])}_cost"],
                  p["precio_original"], p["descuento_pct"]),
             )
-            if not p["es_recarga"]:
+            if not p["es_recarga"] and not p["terminado"]:
                 fk = frasco_key(p["tamano"])
                 conn.execute(f"UPDATE config SET {fk}_stock = {fk}_stock - ? WHERE id = 1", (p["cantidad"],))
             nuevas_ventas.append({
@@ -618,7 +639,7 @@ def api_venta_delete(venta_id):
                          (v["frag_used_gr"], v["codigo"]))
         conn.execute("UPDATE config SET alcohol_stock_gr = alcohol_stock_gr + ? WHERE id = 1",
                      (v["alcohol_used_gr"],))
-        if not v["es_recarga"]:
+        if not v["es_recarga"] and v["tamano"] in (10, 30, 50):
             fk = frasco_key(v["tamano"])
             conn.execute(f"UPDATE config SET {fk}_stock = {fk}_stock + ? WHERE id = 1", (v["cantidad"],))
 
@@ -667,8 +688,8 @@ def api_venta_agregar_item():
 
     if not codigo:
         return error_response("Falta la referencia de la fragancia.")
-    if tamano not in (10, 30, 50):
-        return error_response("Tamaño inválido. Debe ser 10, 30 o 50.")
+    if tamano not in (10, 30, 50, 250):
+        return error_response("Tamaño inválido. Debe ser 10, 30, 50 o 250.")
     if cantidad <= 0:
         return error_response("La cantidad debe ser mayor a 0.")
     if precio_unit <= 0:
@@ -690,20 +711,31 @@ def api_venta_agregar_item():
         if not f:
             return error_response(f"La fragancia con referencia {codigo} no existe.")
 
-        frag_gr, alc_gr = recipe_for(tamano, frag_percent)
+        terminado = es_terminado(f)
+        if terminado:
+            if tamano != 250:
+                return error_response(f"{f['nombre']} es un producto terminado y solo se vende en 250 ML.")
+            es_recarga = False
+            frag_gr, alc_gr = 1.0, 0.0
+        else:
+            if tamano == 250:
+                return error_response("El tamaño 250 ML solo aplica a productos terminados (Splash).")
+            frag_gr, alc_gr = recipe_for(tamano, frag_percent)
         frag_needed = frag_gr * cantidad
         alc_needed  = alc_gr * cantidad
 
         if f["stock_gr"] < frag_needed - 1e-9:
             return error_response(
-                f"Stock insuficiente de {f['nombre']}. "
-                f"Disponible: {f['stock_gr']:.1f} g — necesarios: {frag_needed:.1f} g."
+                f"Stock insuficiente de {f['nombre']}. " +
+                (f"Disponible: {f['stock_gr']:.0f} unid — necesarias: {frag_needed:.0f} unid."
+                 if terminado else
+                 f"Disponible: {f['stock_gr']:.1f} g — necesarios: {frag_needed:.1f} g.")
             )
         if config["alcohol_stock_gr"] < alc_needed - 1e-9:
             return error_response("No hay suficiente alcohol para este ítem.")
 
-        fk = frasco_key(tamano)
-        if not es_recarga and config[f"{fk}_stock"] < cantidad:
+        fk = frasco_key(tamano) if not terminado else None
+        if not es_recarga and not terminado and config[f"{fk}_stock"] < cantidad:
             return error_response(
                 f"No hay suficientes frascos de {tamano}ML. "
                 f"Disponibles: {config[f'{fk}_stock']}."
@@ -721,7 +753,7 @@ def api_venta_agregar_item():
             "UPDATE config SET alcohol_stock_gr = alcohol_stock_gr - ? WHERE id = 1",
             (alc_needed,)
         )
-        if not es_recarga:
+        if not es_recarga and not terminado:
             conn.execute(
                 f"UPDATE config SET {fk}_stock = {fk}_stock - ? WHERE id = 1",
                 (cantidad,)
@@ -744,7 +776,7 @@ def api_venta_agregar_item():
                 precio_unit, total_item, frag_gr * cantidad, alc_gr * cantidad,
                 cliente, cliente_tel, 1 if es_recarga else 0,
                 f["cost_per_gr"], config["alcohol_cost_per_gr"],
-                0 if es_recarga else config[f"{fk}_cost"],
+                0 if (es_recarga or terminado) else config[f"{fk}_cost"],
                 precio_original, descuento_pct,
             ),
         )
@@ -810,7 +842,7 @@ def api_compra_create():
                 new_cost = round(((prev_total + costo) / new_stock) * 100) / 100
             conn.execute("UPDATE fragancias SET stock_gr = ?, cost_per_gr = ? WHERE codigo = ?",
                          (new_stock, new_cost, codigo))
-            detalle = f"+{cantidad:g} g de fragancia"
+            detalle = (f"+{cantidad:g} unidades" if es_terminado(f) else f"+{cantidad:g} g de fragancia")
             ref_codigo, ref_nombre = f["codigo"], f["nombre"]
 
         elif tipo == "alcohol":
