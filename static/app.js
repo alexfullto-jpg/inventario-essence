@@ -92,6 +92,15 @@ function recipeFor(sizeMl) {
 }
 function frascoKey(size) { return 'frasco_f' + size; }
 
+// Productos terminados (ej. Splash 250 ML): stock_gr = unidades, cost_per_gr = costo por unidad
+function isTerminado(f) { return !!f && f.tipo === 'terminado'; }
+function stockUnits(f) { return isTerminado(f) ? (Number(f.stock_gr) || 0) : (Number(f.stock_gr) || 0) / recipeFor(30).fragGr; }
+function fmtStock(f) {
+  return isTerminado(f)
+    ? (Number(f.stock_gr) || 0).toLocaleString('es-CO', { maximumFractionDigits: 0 }) + ' unid'
+    : fmtGr(f.stock_gr);
+}
+
 function findFragancia(codigo) {
   return DATA.fragancias.find(f => String(f.codigo) === String(codigo));
 }
@@ -213,7 +222,7 @@ function renderDashboard() {
   const atrasadas = DATA.facturas.filter(f => f.saldo > 0 && diasDesde(f.fecha) > 15).length;
 
   const r30 = recipeFor(30);
-  const lowStockCount = DATA.fragancias.filter(f => f.stock_gr < r30.fragGr).length;
+  const lowStockCount = DATA.fragancias.filter(f => stockUnits(f) < 1).length;
 
   document.getElementById('kpiGrid').innerHTML = `
     <div class="kpi">
@@ -371,12 +380,12 @@ function renderDashboard() {
     </div>`;
   }
 
-  const low = DATA.fragancias.filter(f => f.stock_gr < r30.fragGr).sort((a, b) => a.stock_gr - b.stock_gr);
+  const low = DATA.fragancias.filter(f => stockUnits(f) < 1).sort((a, b) => stockUnits(a) - stockUnits(b));
   const lowWrap = document.getElementById('lowStockList');
   lowWrap.innerHTML = low.length === 0
     ? '<div class="empty-note">Todo en orden. Ninguna referencia está por debajo del mínimo para un frasco de 30ML.</div>'
     : '<table><thead><tr><th>Código</th><th>Nombre</th><th>Stock</th></tr></thead><tbody>' +
-      low.slice(0, 15).map(f => `<tr><td>${f.codigo}</td><td>${escapeHtml(f.nombre)}</td><td><span class="tag low">${fmtGr(f.stock_gr)}</span></td></tr>`).join('') +
+      low.slice(0, 15).map(f => `<tr><td>${f.codigo}</td><td>${escapeHtml(f.nombre)}</td><td><span class="tag low">${fmtStock(f)}</span></td></tr>`).join('') +
       '</tbody></table>' + (low.length > 15 ? `<div class="hint">y ${low.length - 15} más...</div>` : '');
   if (DATA.config.alcohol_stock_gr < 30) {
     lowWrap.innerHTML += `<div class="hint" style="color:var(--danger); margin-top:10px;">⚠️ Alcohol también está bajo: ${fmtGr(DATA.config.alcohol_stock_gr)}</div>`;
@@ -775,8 +784,7 @@ document.getElementById('saveRecargaBtn').addEventListener('click', () => runAct
  * - "ok":    alcanza para 3 o más frascos de 30ML
  */
 function stockNivel(f) {
-  const r30 = recipeFor(30);
-  const units = f.stock_gr / r30.fragGr;
+  const units = stockUnits(f);
   if (units < 1) return 'bajo';
   if (units < 3) return 'medio';
   return 'ok';
@@ -789,6 +797,7 @@ function estadoTag(f) {
   return '<span class="tag ok">Bien</span>';
 }
 function alcanzaPara(f) {
+  if (isTerminado(f)) return `${Math.floor(f.stock_gr)} x 250ML`;
   const r30 = recipeFor(30);
   return `~${Math.floor(f.stock_gr / r30.fragGr)} x 30ML`;
 }
@@ -805,7 +814,9 @@ function buildPedidoText(fragancias) {
   fragancias.forEach((f, i) => {
     const r30 = recipeFor(30);
     const cant30 = Math.floor(f.stock_gr / r30.fragGr);
-    lines.push(`${i + 1}. ${f.nombre} (Ref. ${f.codigo}) — Stock actual: ${fmtGr(f.stock_gr)} (~${cant30} x 30ML)`);
+    lines.push(isTerminado(f)
+      ? `${i + 1}. ${f.nombre} (Ref. ${f.codigo}) — Stock actual: ${fmtStock(f)}`
+      : `${i + 1}. ${f.nombre} (Ref. ${f.codigo}) — Stock actual: ${fmtGr(f.stock_gr)} (~${cant30} x 30ML)`);
   });
   lines.push('');
   lines.push('¡Por favor confirmar disponibilidad y precio! 🙏');
@@ -944,7 +955,7 @@ function renderLocalizador() {
       const f = res.match;
       return `<tr><td style="font-weight:700;">${escapeHtml(f.nombre)} <span class="hint" style="margin:0;">Ref. ${f.codigo}</span></td>
         <td><span class="tag ok" style="font-size:15px; padding:5px 14px;">📍 ${escapeHtml(f.ubicacion) || 'Sin ubicación asignada'}</span></td>
-        <td>${fmtGr(f.stock_gr)}</td></tr>`;
+        <td>${fmtStock(f)}</td></tr>`;
     } else if (res.reason === 'ambiguo') {
       return `<tr><td colspan="3" style="color:var(--warn);">"${escapeHtml(term)}": ${res.count} coincidencias, sé más específico.</td></tr>`;
     }
@@ -1028,6 +1039,7 @@ function currentVentaMatch() {
   const hintEl = document.getElementById('ventaFraganciaMatch');
   if (!text.trim()) {
     hintEl.textContent = '';
+    applyVentaTipo(null);
   } else if (res.match) {
     hintEl.innerHTML = `✅ ${escapeHtml(res.match.nombre)} (Ref. ${res.match.codigo}) &nbsp;·&nbsp; 📍 Ubicación: <b>${escapeHtml(res.match.ubicacion) || 'no asignada'}</b>`;
     hintEl.style.color = 'var(--ok)';
@@ -1041,7 +1053,24 @@ function currentVentaMatch() {
   }
   return res.match;
 }
+function applyVentaTipo(fragancia) {
+  // Producto terminado (Splash): solo 250 ML, sin recarga. Esencias: 10/30/50.
+  const term = isTerminado(fragancia);
+  const btns = document.querySelector('.venta-tam-btns');
+  const recargaLbl = document.querySelector('.venta-recarga-toggle');
+  const sel = document.getElementById('ventaTamano');
+  if (btns) btns.style.display = term ? 'none' : '';
+  if (recargaLbl) recargaLbl.style.display = term ? 'none' : '';
+  if (term) {
+    sel.value = '250';
+    document.getElementById('ventaRecargaCheckbox').checked = false;
+  } else if (sel.value === '250') {
+    const act = document.querySelector('.venta-tam-btn.active');
+    sel.value = act ? act.getAttribute('data-tam') : '30';
+  }
+}
 function autoFillVentaPrecio(fragancia) {
+  applyVentaTipo(fragancia);
   const size = document.getElementById('ventaTamano').value;
   const esRecarga = document.getElementById('ventaRecargaCheckbox').checked;
   if (esRecarga) {
@@ -1190,6 +1219,11 @@ function updateVentaPreview() {
   const fragNeeded = {}; let alcNeeded = 0;
   const frascoNeeded = { frasco_f10: 0, frasco_f30: 0, frasco_f50: 0 };
   cart.forEach(item => {
+    const fr = findFragancia(item.codigo);
+    if (isTerminado(fr)) {
+      fragNeeded[item.codigo] = (fragNeeded[item.codigo] || 0) + item.cantidad;
+      return;
+    }
     const r = recipeFor(item.tamano);
     fragNeeded[item.codigo] = (fragNeeded[item.codigo] || 0) + r.fragGr * item.cantidad;
     alcNeeded += r.alcGr * item.cantidad;
@@ -1198,7 +1232,10 @@ function updateVentaPreview() {
   let warnings = [];
   Object.keys(fragNeeded).forEach(codigo => {
     const f = findFragancia(codigo);
-    if (f && f.stock_gr < fragNeeded[codigo]) warnings.push(`⚠️ ${f.nombre}: necesitas ${fmtGr(fragNeeded[codigo])}, disponible ${fmtGr(f.stock_gr)}.`);
+    if (!f || f.stock_gr >= fragNeeded[codigo]) return;
+    warnings.push(isTerminado(f)
+      ? `⚠️ ${f.nombre}: necesitas ${fragNeeded[codigo]} unid, disponibles ${fmtStock(f)}.`
+      : `⚠️ ${f.nombre}: necesitas ${fmtGr(fragNeeded[codigo])}, disponible ${fmtGr(f.stock_gr)}.`);
   });
   if (DATA.config.alcohol_stock_gr < alcNeeded) warnings.push(`⚠️ Alcohol: necesitas ${fmtGr(alcNeeded)}, disponible ${fmtGr(DATA.config.alcohol_stock_gr)}.`);
   Object.keys(frascoNeeded).forEach(fk => {
@@ -2427,7 +2464,7 @@ function renderRepTamanos() {
   const mesesRaw = {};
   DATA.ventas.forEach(v => {
     const ym = v.fecha.slice(0, 7);
-    if (!mesesRaw[ym]) mesesRaw[ym] = { 10: 0, 30: 0, 50: 0 };
+    if (!mesesRaw[ym]) mesesRaw[ym] = { 10: 0, 30: 0, 50: 0, 250: 0 };
     mesesRaw[ym][v.tamano] = (mesesRaw[ym][v.tamano] || 0) + utilidadDeVenta(v);
   });
 
@@ -2448,6 +2485,8 @@ function renderRepTamanos() {
         backgroundColor: 'rgba(201,162,39,0.85)', borderColor: 'transparent', borderRadius: 4 },
       { label: '50 ML', data: meses.map(m => mesesRaw[m][50] || 0),
         backgroundColor: 'rgba(232,201,116,0.90)', borderColor: 'transparent', borderRadius: 4 },
+      { label: '250 ML (Splash)', data: meses.map(m => mesesRaw[m][250] || 0),
+        backgroundColor: 'rgba(79,123,127,0.85)', borderColor: 'transparent', borderRadius: 4 },
     ]},
     options: { ...CHART_DEFAULTS,
       plugins: { ...CHART_DEFAULTS.plugins,
@@ -2476,7 +2515,7 @@ function renderRepAlertas() {
   DATA.fragancias.forEach(f => {
     if (f.stock_gr <= 0) return;
     const vendida = DATA.ventas.some(v => v.codigo === f.codigo && v.fecha >= hace30Str);
-    if (!vendida) alertas.push({ tipo: 'warn', msg: `<b>${escapeHtml(f.nombre)}</b> tiene ${fmtGr(f.stock_gr)} en stock pero no se ha vendido en 30+ días.` });
+    if (!vendida) alertas.push({ tipo: 'warn', msg: `<b>${escapeHtml(f.nombre)}</b> tiene ${fmtStock(f)} en stock pero no se ha vendido en 30+ días.` });
   });
 
   // B. Clientes con facturas atrasadas >15 días
@@ -2508,7 +2547,7 @@ function renderRepAlertas() {
 
   // E. Fragancia con stock bajo (<5g)
   DATA.fragancias.forEach(f => {
-    if (f.stock_gr > 0 && f.stock_gr < 5) {
+    if (!isTerminado(f) && f.stock_gr > 0 && f.stock_gr < 5) {
       alertas.push({ tipo: 'danger', msg: `<b>${escapeHtml(f.nombre)}</b> tiene solo <b>${fmtGr(f.stock_gr)}</b> — stock crítico.` });
     }
   });
