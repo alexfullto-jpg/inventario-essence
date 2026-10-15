@@ -75,6 +75,13 @@ def _migrate_schema(conn):
     if "saldos_iniciales_json" not in config_cols:
         conn.execute("ALTER TABLE config ADD COLUMN saldos_iniciales_json TEXT NOT NULL DEFAULT '{}'")
 
+    # Productos terminados (ej. Splash 250 ML): p250 + tipo ('esencia' | 'terminado')
+    frag_cols = {row["name"] for row in conn.execute("PRAGMA table_info(fragancias)")}
+    if "p250" not in frag_cols:
+        conn.execute("ALTER TABLE fragancias ADD COLUMN p250 REAL NOT NULL DEFAULT 0")
+    if "tipo" not in frag_cols:
+        conn.execute("ALTER TABLE fragancias ADD COLUMN tipo TEXT NOT NULL DEFAULT 'esencia'")
+
     conn.commit()
 
 
