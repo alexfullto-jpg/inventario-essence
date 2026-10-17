@@ -2744,10 +2744,10 @@ function renderRepRentabilidad() {
 
   const ctx = document.getElementById('repCanvasRentabilidad').getContext('2d');
   _charts['repRentabilidad'] = new Chart(ctx, {
-    type: 'bar', indexAxis: 'y',
+    type: 'bar',
     data: { labels, datasets: [{ data: values, backgroundColor: colors,
       borderColor: 'transparent', borderRadius: 6, borderSkipped: false }] },
-    options: { ...CHART_DEFAULTS,
+    options: { ...CHART_DEFAULTS, indexAxis: 'y',
       plugins: { ...CHART_DEFAULTS.plugins,
         tooltip: { ...CHART_DEFAULTS.plugins.tooltip,
           callbacks: { label: c => ` Ganancia: ${fmtCOP(c.parsed.x)}` } } },
@@ -2787,11 +2787,11 @@ function renderRepClientes() {
 
   const ctx = document.getElementById('repCanvasClientes').getContext('2d');
   _charts['repClientes'] = new Chart(ctx, {
-    type: 'bar', indexAxis: 'y',
+    type: 'bar',
     data: { labels, datasets: [{ data: values,
       backgroundColor: PALETTE.slice(0, sorted.length),
       borderColor: 'transparent', borderRadius: 6, borderSkipped: false }] },
-    options: { ...CHART_DEFAULTS,
+    options: { ...CHART_DEFAULTS, indexAxis: 'y',
       plugins: { ...CHART_DEFAULTS.plugins,
         tooltip: { ...CHART_DEFAULTS.plugins.tooltip,
           callbacks: { label: c => ` ${fmtCOP(c.parsed.x)}` } } },
