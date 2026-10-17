@@ -260,11 +260,11 @@ function renderDashboard() {
       <div class="label">Gastos este mes</div>
       <div class="value">${fmtCOP(gastosMes)}</div>
     </div>
-    <div class="kpi">
+    <div class="kpi" data-kpi="compras" style="cursor:pointer;" title="Toca para ver el detalle de las compras">
       <div class="kpi-icon">🛍️</div>
       <div class="label">Compras este mes</div>
       <div class="value">${fmtCOP(totalComprasMes)}</div>
-      <div class="kpi-sub">${comprasMes.length} compra${comprasMes.length !== 1 ? 's' : ''} registrada${comprasMes.length !== 1 ? 's' : ''}</div>
+      <div class="kpi-sub">${comprasMes.length} compra${comprasMes.length !== 1 ? 's' : ''} · toca para ver detalle</div>
     </div>
     <div class="kpi ${lowStockCount > 0 ? 'danger' : 'ok'}">
       <div class="kpi-icon">⚗️</div>
@@ -1899,6 +1899,61 @@ document.getElementById('informeWhatsappBtn').addEventListener('click', () => {
   const cli = DATA.clientes.find(c => c.nombre === nombre);
   const fac = DATA.facturas.find(f => (f.cliente || '') === nombre && f.cliente_tel);
   sendTicketWhatsApp(buildInformeWhatsApp(nombre, incl), (cli && cli.telefono) || (fac && fac.cliente_tel) || '');
+});
+
+
+// ───────────────────────── Detalle de compras del mes ─────────────────────────
+const COMPRA_TIPO_LABEL = {
+  fragancia: '🌸 Fragancia', alcohol: '🧪 Alcohol', otro: '📦 Otro producto',
+  frasco10: '🧴 Frascos 10ML', frasco30: '🧴 Frascos 30ML', frasco50: '🧴 Frascos 50ML'
+};
+function renderComprasMes() {
+  const ym = document.getElementById('comprasMesInput').value || new Date().toISOString().slice(0, 7);
+  const lista = DATA.compras.filter(c => (c.fecha || '').slice(0, 7) === ym)
+    .sort((a, b) => b.fecha.localeCompare(a.fecha) || (b.created_at || '').localeCompare(a.created_at || ''));
+  const total = lista.reduce((a, c) => a + (c.costo_total || 0), 0);
+  const porTipo = {};
+  lista.forEach(c => {
+    let t = c.tipo;
+    if (t === 'fragancia') {
+      const f = DATA.fragancias.find(x => x.codigo === c.codigo);
+      if (f && isTerminado(f)) t = 'splash';
+    }
+    porTipo[t] = porTipo[t] || { n: 0, total: 0 };
+    porTipo[t].n++; porTipo[t].total += c.costo_total || 0;
+  });
+  const lbl = t => t === 'splash' ? '✨ Splash 250ML' : (COMPRA_TIPO_LABEL[t] || t);
+  document.getElementById('comprasMesResumen').innerHTML = lista.length === 0 ? '' : `
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <div class="kpi" style="min-width:150px;"><div class="label">Total comprado</div><div class="value">${fmtCOP(total)}</div><div class="kpi-sub">${lista.length} compra${lista.length !== 1 ? 's' : ''}</div></div>
+      ${Object.keys(porTipo).map(t => `<div class="kpi" style="min-width:130px;"><div class="label">${lbl(t)}</div><div class="value" style="font-size:20px;">${fmtCOP(porTipo[t].total)}</div><div class="kpi-sub">${porTipo[t].n} compra${porTipo[t].n !== 1 ? 's' : ''}</div></div>`).join('')}
+    </div>`;
+  document.getElementById('comprasMesTbody').innerHTML = lista.length === 0
+    ? '<tr><td colspan="7"><div class="empty-note">No hay compras registradas en este mes.</div></td></tr>'
+    : lista.map(c => {
+        const nombre = escapeHtml(c.nombre || '—') + (c.codigo ? ` <small style="color:var(--muted)">(Ref. ${escapeHtml(c.codigo)})</small>` : '');
+        return `<tr>
+          <td>${c.fecha}</td>
+          <td>${COMPRA_TIPO_LABEL[c.tipo] || escapeHtml(c.tipo)}</td>
+          <td>${nombre}</td>
+          <td>${escapeHtml(c.detalle || c.cantidad)}</td>
+          <td><strong>${fmtCOP(c.costo_total || 0)}</strong></td>
+          <td style="color:var(--muted)">${escapeHtml(c.cuenta || '—')}</td>
+          <td style="color:var(--muted);font-size:12px">${escapeHtml(c.nota || '')}</td>
+        </tr>`;
+      }).join('');
+}
+function openComprasMes() {
+  document.getElementById('comprasMesInput').value = new Date().toISOString().slice(0, 7);
+  renderComprasMes();
+  document.getElementById('comprasMesOverlay').classList.add('open');
+}
+document.getElementById('kpiGrid').addEventListener('click', (e) => {
+  if (e.target.closest('[data-kpi="compras"]')) openComprasMes();
+});
+document.getElementById('comprasMesInput').addEventListener('change', renderComprasMes);
+document.getElementById('closeComprasMesBtn').addEventListener('click', () => {
+  document.getElementById('comprasMesOverlay').classList.remove('open');
 });
 
 function openAbonoModal(facturaId) {

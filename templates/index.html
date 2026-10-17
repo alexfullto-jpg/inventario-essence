@@ -442,6 +442,24 @@
   </div>
 </section>
 
+<!-- DETALLE DE COMPRAS DEL MES MODAL -->
+<div class="overlay" id="comprasMesOverlay">
+  <div class="modal" style="max-width:860px;max-height:90vh;display:flex;flex-direction:column;">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+      <h3 style="margin:0;">🛍️ Detalle de compras</h3>
+      <input type="month" id="comprasMesInput" class="search-input" style="margin:0;max-width:170px;">
+    </div>
+    <div id="comprasMesResumen" style="margin:14px 0;"></div>
+    <div class="table-wrap" style="flex:1;min-height:0;">
+      <table>
+        <thead><tr><th>Fecha</th><th>Tipo</th><th>Producto</th><th>Cantidad</th><th>Costo</th><th>Cuenta</th><th>Nota</th></tr></thead>
+        <tbody id="comprasMesTbody"></tbody>
+      </table>
+    </div>
+    <div class="modal-actions"><button class="btn" id="closeComprasMesBtn">Cerrar</button></div>
+  </div>
+</div>
+
 <!-- INFORME DETALLADO DE CLIENTE MODAL -->
 <div class="overlay" id="informeOverlay">
   <div class="modal">
