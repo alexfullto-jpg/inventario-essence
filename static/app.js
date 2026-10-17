@@ -209,6 +209,8 @@ function renderDashboard() {
   const fragUsadaMes = ventasMes.reduce((s, v) => s + v.frag_used_gr, 0);
   const costoMes = ventasMes.reduce((s, v) => s + costoDeVenta(v), 0);
   const gastosMes = DATA.gastos.filter(g => g.fecha.slice(0, 7) === ym).reduce((s, g) => s + g.monto, 0);
+  const comprasMes = DATA.compras.filter(x => (x.fecha || '').slice(0, 7) === ym);
+  const totalComprasMes = comprasMes.reduce((a, x) => a + (x.costo_total || 0), 0);
   const utilidadMes = ingresosMes - costoMes;
   const utilidadNetaMes = utilidadMes - gastosMes;
   const margenMes = margenPct(ingresosMes, utilidadMes);
@@ -258,6 +260,12 @@ function renderDashboard() {
       <div class="label">Gastos este mes</div>
       <div class="value">${fmtCOP(gastosMes)}</div>
     </div>
+    <div class="kpi">
+      <div class="kpi-icon">🛍️</div>
+      <div class="label">Compras este mes</div>
+      <div class="value">${fmtCOP(totalComprasMes)}</div>
+      <div class="kpi-sub">${comprasMes.length} compra${comprasMes.length !== 1 ? 's' : ''} registrada${comprasMes.length !== 1 ? 's' : ''}</div>
+    </div>
     <div class="kpi ${lowStockCount > 0 ? 'danger' : 'ok'}">
       <div class="kpi-icon">⚗️</div>
       <div class="label">Referencias en alerta</div>
@@ -290,8 +298,6 @@ function renderDashboard() {
   const valorFrascos30  = (c.frasco_f30_stock || 0)  * (c.frasco_f30_cost || 0);
   const valorFrascos50  = (c.frasco_f50_stock || 0)  * (c.frasco_f50_cost || 0);
   const valorOtros      = DATA.otrosProductos.reduce((s, o) => s + (o.stock || 0) * (o.costo_unidad || 0), 0);
-  const comprasMes      = DATA.compras.filter(x => (x.fecha || '').slice(0, 7) === ym);
-  const totalComprasMes = comprasMes.reduce((a, x) => a + (x.costo_total || 0), 0);
   const valorTotalInv   = valorFragancias + valorSplash + valorAlcohol + valorFrascos10 + valorFrascos30 + valorFrascos50 + valorOtros;
 
   // ── RESUMEN POR TAMAÑO (mes actual) ───────────────────────────────────────
@@ -355,10 +361,6 @@ function renderDashboard() {
           <div class="inv-row inv-row-total">
             <span class="inv-label">TOTAL INVERTIDO</span>
             <span class="inv-val">${fmtCOP(valorTotalInv)}</span>
-          </div>
-          <div class="inv-row">
-            <span class="inv-label">🛍️ Compras este mes (${comprasMes.length})</span>
-            <span class="inv-val">${fmtCOP(totalComprasMes)}</span>
           </div>
         </div>
       </div>
