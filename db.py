@@ -81,6 +81,11 @@ def _migrate_schema(conn):
         conn.execute("ALTER TABLE fragancias ADD COLUMN p250 REAL NOT NULL DEFAULT 0")
     if "tipo" not in frag_cols:
         conn.execute("ALTER TABLE fragancias ADD COLUMN tipo TEXT NOT NULL DEFAULT 'esencia'")
+    # Descontinuar sin borrar historial: activo=1 (en catálogo) | 0 (descontinuada)
+    if "activo" not in frag_cols:
+        conn.execute("ALTER TABLE fragancias ADD COLUMN activo INTEGER NOT NULL DEFAULT 1")
+    if "descontinuada_en" not in frag_cols:
+        conn.execute("ALTER TABLE fragancias ADD COLUMN descontinuada_en TEXT NOT NULL DEFAULT ''")
 
     conn.commit()
 

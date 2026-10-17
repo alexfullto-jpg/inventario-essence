@@ -94,6 +94,11 @@ function frascoKey(size) { return 'frasco_f' + size; }
 
 // Productos terminados (ej. Splash 250 ML): stock_gr = unidades, cost_per_gr = costo por unidad
 function isTerminado(f) { return !!f && f.tipo === 'terminado'; }
+// Descontinuadas: salen del catálogo/alertas pero conservan su historial (activo = 0)
+function esActiva(f) { return !!f && f.activo !== 0; }
+function fragActivas() { return DATA.fragancias.filter(esActiva); }
+// Para vender: activas + descontinuadas que aún tienen stock (liquidación)
+function fragVendibles() { return DATA.fragancias.filter(f => esActiva(f) || (Number(f.stock_gr) || 0) > 0); }
 function stockUnits(f) { return isTerminado(f) ? (Number(f.stock_gr) || 0) : (Number(f.stock_gr) || 0) / recipeFor(30).fragGr; }
 function fmtStock(f) {
   return isTerminado(f)
@@ -118,11 +123,11 @@ function margenPct(total, utilidad) { return total ? (utilidad / total) * 100 : 
 // Fragancia search
 // ---------------------------------------------------------------------------
 
-function fraganciaLabel(f) { return `${f.nombre} (Ref. ${f.codigo})`; }
+function fraganciaLabel(f) { return `${f.nombre}${esActiva(f) ? '' : ' · liquidación'} (Ref. ${f.codigo})`; }
 
 function populateFraganciaDatalist() {
   const dl = document.getElementById('fraganciaDatalist');
-  dl.innerHTML = [...DATA.fragancias].sort((a, b) => a.nombre.localeCompare(b.nombre))
+  dl.innerHTML = [...fragVendibles()].sort((a, b) => a.nombre.localeCompare(b.nombre))
     .map(f => `<option value="${escapeAttr(fraganciaLabel(f))}">`).join('');
 }
 function resolveFragancia(text) {
@@ -130,12 +135,12 @@ function resolveFragancia(text) {
   if (!text) return { match: null, reason: 'vacio' };
   const refMatch = text.match(/\(Ref\.\s*(\S+)\)\s*$/i);
   if (refMatch) {
-    const f = DATA.fragancias.find(x => String(x.codigo) === String(refMatch[1]));
+    const f = fragVendibles().find(x => String(x.codigo) === String(refMatch[1]));
     if (f) return { match: f };
   }
-  const exact = DATA.fragancias.filter(x => x.nombre.toLowerCase() === text.toLowerCase() || String(x.codigo) === text);
+  const exact = fragVendibles().filter(x => x.nombre.toLowerCase() === text.toLowerCase() || String(x.codigo) === text);
   if (exact.length === 1) return { match: exact[0] };
-  const partial = DATA.fragancias.filter(x =>
+  const partial = fragVendibles().filter(x =>
     x.nombre.toLowerCase().includes(text.toLowerCase()) || String(x.codigo).includes(text));
   if (partial.length === 1) return { match: partial[0] };
   if (partial.length > 1) return { match: null, reason: 'ambiguo', count: partial.length };
@@ -224,7 +229,7 @@ function renderDashboard() {
   const atrasadas = DATA.facturas.filter(f => f.saldo > 0 && diasDesde(f.fecha) > 15).length;
 
   const r30 = recipeFor(30);
-  const lowStockCount = DATA.fragancias.filter(f => stockUnits(f) < 1).length;
+  const lowStockCount = fragActivas().filter(f => stockUnits(f) < 1).length;
 
   document.getElementById('kpiGrid').innerHTML = `
     <div class="kpi">
@@ -377,7 +382,7 @@ function renderDashboard() {
     </div>`;
   }
 
-  const low = DATA.fragancias.filter(f => stockUnits(f) < 1).sort((a, b) => stockUnits(a) - stockUnits(b));
+  const low = fragActivas().filter(f => stockUnits(f) < 1).sort((a, b) => stockUnits(a) - stockUnits(b));
   const lowWrap = document.getElementById('lowStockList');
   lowWrap.innerHTML = low.length === 0
     ? '<div class="empty-note">Todo en orden. Ninguna referencia está por debajo del mínimo para un frasco de 30ML.</div>'
@@ -835,10 +840,12 @@ function renderPedidoRapidoPanel(fragancias) {
 
 function renderInventoryTable() {
   const q = (document.getElementById('inventorySearch').value || '').trim().toLowerCase();
-  document.getElementById('fragCount').textContent = DATA.fragancias.length;
+  document.getElementById('fragCount').textContent = fragActivas().length;
 
   // Aplicar filtro de stock primero, luego búsqueda de texto
   let rows = DATA.fragancias.filter(f => {
+    if (inventoryStockFilter === 'descontinuadas') return !esActiva(f) && (!q || f.nombre.toLowerCase().includes(q) || String(f.codigo).includes(q));
+    if (!esActiva(f)) return false;
     if (inventoryStockFilter !== 'todos' && stockNivel(f) !== inventoryStockFilter) return false;
     if (q && !f.nombre.toLowerCase().includes(q) && !String(f.codigo).includes(q)) return false;
     return true;
@@ -857,6 +864,7 @@ function renderInventoryTable() {
       `<tr><td colspan="8"><div class="empty-note">
         ${inventoryStockFilter === 'bajo' ? '🎉 ¡Excelente! Ninguna fragancia está en stock bajo.' :
           inventoryStockFilter === 'medio' ? 'Ninguna fragancia está en nivel medio.' :
+          inventoryStockFilter === 'descontinuadas' ? 'Aún no has descontinuado ninguna fragancia.' :
           'No se encontraron referencias con ese filtro.'}
       </div></td></tr>`;
     return;
@@ -872,7 +880,12 @@ function renderInventoryTable() {
       <td>${alcanzaPara(f)}</td>
       <td><input type="number" class="cell-input cost-input" value="${f.cost_per_gr}" data-codigo="${f.codigo}" style="width:70px;"></td>
       <td>${estadoTag(f)}</td>
-      <td><button class="btn small danger" data-delfrag="${f.codigo}" title="Eliminar fragancia">🗑️</button></td>
+      <td style="white-space:nowrap;">
+        ${esActiva(f)
+          ? `<button class="btn small" data-descfrag="${f.codigo}" title="Descontinuar: sale del catálogo, conserva el historial">⛔</button>`
+          : `<button class="btn small" data-reactfrag="${f.codigo}" title="Reactivar en el catálogo">♻️</button>`}
+        <button class="btn small danger" data-delfrag="${f.codigo}" title="Eliminar fragancia">🗑️</button>
+      </td>
     </tr>`).join('');
 }
 
@@ -889,7 +902,7 @@ document.addEventListener('click', (e) => {
 // Copiar lista de pedido
 document.addEventListener('click', (e) => {
   if (!e.target.closest('#copiarPedidoBtn')) return;
-  const bajasRows = DATA.fragancias
+  const bajasRows = fragActivas()
     .filter(f => stockNivel(f) === 'bajo')
     .sort((a, b) => a.stock_gr - b.stock_gr);
   const texto = buildPedidoText(bajasRows);
@@ -901,7 +914,7 @@ document.addEventListener('click', (e) => {
 // Enviar pedido por WhatsApp
 document.addEventListener('click', (e) => {
   if (!e.target.closest('#whatsappPedidoBtn')) return;
-  const bajasRows = DATA.fragancias
+  const bajasRows = fragActivas()
     .filter(f => stockNivel(f) === 'bajo')
     .sort((a, b) => a.stock_gr - b.stock_gr);
   const texto = buildPedidoText(bajasRows);
@@ -910,6 +923,31 @@ document.addEventListener('click', (e) => {
 
 document.getElementById('inventorySearch').addEventListener('input', debounce(renderInventoryTable, 150));
 
+async function setFraganciaActiva(codigos, activo) {
+  for (const c of codigos) {
+    await api(`/api/fragancia/${encodeURIComponent(c)}`, { method: 'POST', body: JSON.stringify({ activo }) });
+  }
+}
+function confirmarDescontinuar(lista) {
+  const conStock = lista.filter(f => (Number(f.stock_gr) || 0) > 0).length;
+  const nombres = lista.length === 1 ? `"${lista[0].nombre}"` : `${lista.length} fragancias`;
+  return confirm(`¿Descontinuar ${nombres}?\n\nSalen del catálogo, del buscador y de las alertas. El historial de ventas se conserva y puedes reactivarlas cuando quieras.${conStock ? `\n\n${conStock === 1 && lista.length === 1 ? 'Todavía tiene stock' : conStock + ' todavía tienen stock'}: podrás seguir vendiéndolas como liquidación.` : ''}`);
+}
+document.getElementById('inventoryTbody').addEventListener('click', (e) => {
+  const desc = e.target.closest('button[data-descfrag]');
+  if (desc) {
+    const f = findFragancia(desc.getAttribute('data-descfrag'));
+    if (!f || !confirmarDescontinuar([f])) return;
+    runAction(async () => { await setFraganciaActiva([f.codigo], false); showToast('Fragancia descontinuada'); });
+    return;
+  }
+  const re = e.target.closest('button[data-reactfrag]');
+  if (re) {
+    const f = findFragancia(re.getAttribute('data-reactfrag'));
+    if (!f) return;
+    runAction(async () => { await setFraganciaActiva([f.codigo], true); showToast('Fragancia reactivada'); });
+  }
+});
 document.getElementById('inventoryTbody').addEventListener('click', (e) => {
   const btn = e.target.closest('button[data-delfrag]');
   if (!btn) return;
@@ -2433,8 +2471,80 @@ function renderReportes() {
   renderRepClientes();
   renderRepTamanos();
   renderRepAlertas();
+  renderRepRotacion();
   renderRepTablaFragancias();
 }
+
+
+// ── ROTACIÓN DE FRAGANCIAS (quietas) ────────────────────────────────────────
+function rotacionData() {
+  const dias = Number(document.getElementById('rotDias').value) || 90;
+  const limite = new Date(); limite.setDate(limite.getDate() - dias);
+  const limiteStr = limite.toISOString().slice(0, 10);
+  const porCodigo = {};
+  DATA.ventas.forEach(v => {
+    const k = String(v.codigo);
+    const r = porCodigo[k] = porCodigo[k] || { ultima: '', ventana: 0, total: 0 };
+    if (v.fecha > r.ultima) r.ultima = v.fecha;
+    r.total += v.cantidad || 0;
+    if (v.fecha >= limiteStr) r.ventana += v.cantidad || 0;
+  });
+  return fragActivas().map(f => {
+    const r = porCodigo[String(f.codigo)] || { ultima: '', ventana: 0, total: 0 };
+    const stock = Number(f.stock_gr) || 0;
+    const parado = stock * (Number(f.cost_per_gr) || 0);
+    const quieta = r.ventana === 0;
+    return { f, ...r, stock, parado, quieta, diasSin: r.ultima ? diasDesde(r.ultima) : null, dias };
+  });
+}
+function renderRepRotacion() {
+  if (!document.getElementById('rotTbody')) return;
+  const soloStock = document.getElementById('rotSoloStock').checked;
+  const soloQuietas = document.getElementById('rotSoloQuietas').checked;
+  const todas = rotacionData();
+  const quietasConStock = todas.filter(x => x.quieta && x.stock > 0);
+  const capital = quietasConStock.reduce((a, x) => a + x.parado, 0);
+  const dias = todas.length ? todas[0].dias : 90;
+  document.getElementById('rotResumen').innerHTML = `
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <div class="kpi ${quietasConStock.length ? 'warn' : 'ok'}" style="min-width:160px;"><div class="label">Quietas con stock</div><div class="value">${quietasConStock.length}</div><div class="kpi-sub">sin ventas en ${dias} días</div></div>
+      <div class="kpi ${capital > 0 ? 'warn' : 'ok'}" style="min-width:160px;"><div class="label">Dinero parado</div><div class="value">${fmtCOP(capital)}</div><div class="kpi-sub">en esas referencias</div></div>
+      <div class="kpi" style="min-width:160px;"><div class="label">Referencias activas</div><div class="value">${todas.length}</div><div class="kpi-sub">${todas.filter(x => !x.quieta).length} con ventas en la ventana</div></div>
+    </div>`;
+  let rows = todas.filter(x => (!soloStock || x.stock > 0) && (!soloQuietas || x.quieta));
+  rows.sort((a, b) => b.parado - a.parado || (b.diasSin ?? 9999) - (a.diasSin ?? 9999));
+  document.getElementById('rotSelAll').checked = false;
+  document.getElementById('rotTbody').innerHTML = rows.length === 0
+    ? '<tr><td colspan="9"><div class="empty-note">🎉 No hay fragancias que cumplan ese filtro.</div></td></tr>'
+    : rows.map(x => {
+        const ultima = x.ultima ? `${x.ultima} <small style="color:var(--muted)">(hace ${x.diasSin} d)</small>` : '<span style="color:var(--danger)">Nunca vendida</span>';
+        const estado = !x.quieta ? '<span class="tag ok">🟢 Rota</span>'
+          : (x.ultima ? '<span class="tag low">🔴 Quieta</span>' : '<span class="tag low">⚫ Sin ventas</span>');
+        return `<tr>
+          <td><input type="checkbox" class="rot-sel" value="${escapeAttr(x.f.codigo)}"></td>
+          <td>${escapeHtml(x.f.codigo)}</td>
+          <td>${escapeHtml(x.f.nombre)}</td>
+          <td>${ultima}</td>
+          <td>${x.ventana}</td>
+          <td>${x.total}</td>
+          <td>${fmtStock(x.f)}</td>
+          <td><strong>${fmtCOP(x.parado)}</strong></td>
+          <td>${estado}</td>
+        </tr>`;
+      }).join('');
+}
+['rotDias', 'rotSoloStock', 'rotSoloQuietas'].forEach(id =>
+  document.getElementById(id).addEventListener('change', renderRepRotacion));
+document.getElementById('rotSelAll').addEventListener('change', (e) => {
+  document.querySelectorAll('.rot-sel').forEach(c => { c.checked = e.target.checked; });
+});
+document.getElementById('rotDescontinuarBtn').addEventListener('click', () => {
+  const codigos = [...document.querySelectorAll('.rot-sel:checked')].map(c => c.value);
+  if (codigos.length === 0) { showToast('Selecciona al menos una fragancia.', true); return; }
+  const lista = codigos.map(findFragancia).filter(Boolean);
+  if (!confirmarDescontinuar(lista)) return;
+  runAction(async () => { await setFraganciaActiva(codigos, false); showToast(`${codigos.length} fragancia${codigos.length !== 1 ? 's' : ''} descontinuada${codigos.length !== 1 ? 's' : ''}`); });
+});
 
 // ── 1. RESUMEN EJECUTIVO ─────────────────────────────────────
 function renderRepEjecutivo() {
@@ -2745,7 +2855,7 @@ function renderRepAlertas() {
   const mesAnt = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1).toISOString().slice(0, 7);
 
   // A. Fragancias con stock pero sin ventas en 30 días
-  DATA.fragancias.forEach(f => {
+  fragActivas().forEach(f => {
     if (f.stock_gr <= 0) return;
     const vendida = DATA.ventas.some(v => v.codigo === f.codigo && v.fecha >= hace30Str);
     if (!vendida) alertas.push({ tipo: 'warn', msg: `<b>${escapeHtml(f.nombre)}</b> tiene ${fmtStock(f)} en stock pero no se ha vendido en 30+ días.` });
@@ -2779,7 +2889,7 @@ function renderRepAlertas() {
   }
 
   // E. Fragancia con stock bajo (<5g)
-  DATA.fragancias.forEach(f => {
+  fragActivas().forEach(f => {
     if (!isTerminado(f) && f.stock_gr > 0 && f.stock_gr < 5) {
       alertas.push({ tipo: 'danger', msg: `<b>${escapeHtml(f.nombre)}</b> tiene solo <b>${fmtGr(f.stock_gr)}</b> — stock crítico.` });
     }

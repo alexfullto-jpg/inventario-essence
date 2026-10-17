@@ -127,6 +127,7 @@
       <button class="pill-btn" data-stock-filter="bajo">🔴 Stock bajo</button>
       <button class="pill-btn" data-stock-filter="medio">🟡 Stock medio</button>
       <button class="pill-btn" data-stock-filter="ok">🟢 Stock OK</button>
+      <button class="pill-btn" data-stock-filter="descontinuadas">⛔ Descontinuadas</button>
       <input type="text" class="search-input" id="inventorySearch" placeholder="Buscar referencia..." style="margin-bottom:0; margin-left:auto; max-width:220px;">
     </div>
 
@@ -692,6 +693,30 @@
   <!-- Alertas inteligentes -->
   <div class="rep-section-label">⚠️ Alertas inteligentes</div>
   <div id="repAlertas" style="margin-bottom:20px;"></div>
+
+  <!-- Rotación de fragancias -->
+  <div class="rep-section-label">🐢 Rotación de fragancias</div>
+  <div class="card" style="margin-bottom:20px;">
+    <h3>Fragancias quietas</h3>
+    <p class="sub">Referencias activas ordenadas por el dinero que tienes parado en ellas. Selecciona las que quieras sacar del catálogo.</p>
+    <div class="filter-row" style="margin-bottom:12px;gap:10px;flex-wrap:wrap;align-items:center;">
+      <label style="font-size:13px;color:var(--muted);">Sin vender hace
+        <select id="rotDias" class="search-input" style="margin:0 4px;max-width:110px;display:inline-block;">
+          <option value="30">30 días</option><option value="60">60 días</option><option value="90" selected>90 días</option><option value="120">120 días</option><option value="180">180 días</option>
+        </select>
+      </label>
+      <label style="font-size:13px;color:var(--muted);display:flex;gap:6px;align-items:center;"><input type="checkbox" id="rotSoloStock" checked> Solo con stock</label>
+      <label style="font-size:13px;color:var(--muted);display:flex;gap:6px;align-items:center;"><input type="checkbox" id="rotSoloQuietas" checked> Solo quietas</label>
+      <button class="btn small danger" id="rotDescontinuarBtn" style="margin-left:auto;">⛔ Descontinuar seleccionadas</button>
+    </div>
+    <div id="rotResumen" style="margin-bottom:12px;"></div>
+    <div class="table-wrap" style="max-height:460px;">
+      <table>
+        <thead><tr><th><input type="checkbox" id="rotSelAll"></th><th>Ref.</th><th>Fragancia</th><th>Última venta</th><th>Vendidas (ventana)</th><th>Vendidas (total)</th><th>Stock</th><th>Dinero parado</th><th>Estado</th></tr></thead>
+        <tbody id="rotTbody"></tbody>
+      </table>
+    </div>
+  </div>
 
   <!-- Tabla detalle fragancias -->
   <div class="card">

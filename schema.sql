@@ -32,7 +32,9 @@ CREATE TABLE IF NOT EXISTS fragancias (
     tipo TEXT NOT NULL DEFAULT 'esencia',
     stock_gr REAL NOT NULL DEFAULT 0,
     cost_per_gr REAL NOT NULL DEFAULT 0,
-    ubicacion TEXT NOT NULL DEFAULT ''
+    ubicacion TEXT NOT NULL DEFAULT '',
+    activo INTEGER NOT NULL DEFAULT 1,
+    descontinuada_en TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS otros_productos (

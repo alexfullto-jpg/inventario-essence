@@ -234,6 +234,12 @@ def api_fragancia_update(codigo):
         if "ubicacion" in data:
             fields.append("ubicacion = ?")
             values.append(str(data["ubicacion"]))
+        if "activo" in data:
+            activa = 1 if data["activo"] else 0
+            fields.append("activo = ?")
+            values.append(activa)
+            fields.append("descontinuada_en = ?")
+            values.append("" if activa else today_str())
         if fields:
             values.append(str(codigo))
             conn.execute(f"UPDATE fragancias SET {', '.join(fields)} WHERE codigo = ?", values)
