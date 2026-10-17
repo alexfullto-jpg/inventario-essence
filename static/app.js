@@ -1658,6 +1658,7 @@ function renderCuentas() {
           <div class="fc-actions">
             ${f.saldo > 0 ? `<button class="btn small primary fc-btn-abonar" data-abonar="${f.id}">+ Abonar</button>` : ''}
             <button class="btn small" data-estadofactura="${f.id}" title="Estado de cuenta WhatsApp">📤</button>
+            <button class="btn small" data-informefactura="${f.id}" title="Informe detallado del cliente">📄</button>
             <button class="btn small" data-editcliente="${f.id}" title="Editar cliente">✏️</button>
             <button class="btn small" data-editarpedido="${f.folio}" title="Editar pedido">📋</button>
           </div>
@@ -1699,6 +1700,8 @@ function renderCuentas() {
 document.getElementById('facturasTbody').addEventListener('click', (e) => {
   const abonarBtn = e.target.closest('button[data-abonar]');
   if (abonarBtn) { openAbonoModal(abonarBtn.getAttribute('data-abonar')); return; }
+  const informeBtn = e.target.closest('button[data-informefactura]');
+  if (informeBtn) { openInformeModal(informeBtn.getAttribute('data-informefactura')); return; }
   const estadoBtn = e.target.closest('button[data-estadofactura]');
   if (estadoBtn) { sendEstadoCuentaFactura(estadoBtn.getAttribute('data-estadofactura')); return; }
   const editBtn = e.target.closest('button[data-editcliente]');
@@ -1716,6 +1719,184 @@ document.getElementById('abonosTbody').addEventListener('click', (e) => {
     document.getElementById('deleteMsg').textContent = 'La factura volverá a quedar con este monto como saldo pendiente.';
     document.getElementById('deleteOverlay').classList.add('open');
   }
+});
+
+
+// ───────────────────────── Informe detallado por cliente ─────────────────────────
+function tamLabel(t) { return Number(t) >= 250 ? `Splash ${t} ML` : `${t} ML`; }
+
+function informeFacturasDeCliente(nombre, incluirPagadas) {
+  return DATA.facturas
+    .filter(f => (f.cliente || '') === nombre && (incluirPagadas || f.saldo > 0))
+    .sort((a, b) => a.fecha.localeCompare(b.fecha) || a.folio - b.folio);
+}
+function informeItemsDeFactura(f) {
+  return DATA.ventas.filter(v => v.folio === f.folio);
+}
+
+function buildInformeHTML(nombre, incluirPagadas) {
+  const facturas = informeFacturasDeCliente(nombre, incluirPagadas);
+  const biz = escapeHtml(DATA.config.business_name || '');
+  const wa = DATA.config.business_whatsapp ? `+${escapeHtml(DATA.config.business_whatsapp)}` : '';
+  const hoy = new Date().toISOString().slice(0, 10);
+  const totFact = facturas.reduce((a, f) => a + f.total, 0);
+  const totAbon = facturas.reduce((a, f) => a + f.abonos.reduce((x, y) => x + y.monto, 0), 0);
+  const totSaldo = facturas.reduce((a, f) => a + f.saldo, 0);
+  const pad = n => String(n).padStart(4, '0');
+
+  const resumen = facturas.map(f => {
+    const ab = f.abonos.reduce((x, y) => x + y.monto, 0);
+    const d = diasDesde(f.fecha);
+    const est = f.saldo <= 0 ? 'Pagada' : (d > 15 ? `Atrasada ${d} días` : 'Pendiente');
+    return `<tr><td>#${pad(f.folio)}</td><td>${f.fecha}</td><td class="r">${fmtCOP(f.total)}</td><td class="r">${fmtCOP(ab)}</td><td class="r b">${fmtCOP(f.saldo)}</td><td>${est}</td></tr>`;
+  }).join('');
+
+  const detalle = facturas.map(f => {
+    const items = informeItemsDeFactura(f);
+    const ab = f.abonos.slice().sort((a, b) => a.fecha.localeCompare(b.fecha));
+    const abTot = ab.reduce((x, y) => x + y.monto, 0);
+    const filasItems = items.map(it => {
+      const desc = it.descuento_pct ? `${it.descuento_pct}%` : '—';
+      const rec = it.es_recarga ? ' <span class="tag">Recarga</span>' : '';
+      return `<tr><td>${escapeHtml(it.nombre)}${rec}<br><small>Ref. ${escapeHtml(it.codigo)}</small></td><td>${tamLabel(it.tamano)}</td><td class="r">${it.cantidad}</td><td class="r">${fmtCOP(it.precio_unit)}</td><td class="r">${desc}</td><td class="r">${fmtCOP(it.total)}</td></tr>`;
+    }).join('') || '<tr><td colspan="6"><small>Sin detalle de productos registrado.</small></td></tr>';
+    const filasAb = ab.map(a => `<tr><td>${a.fecha}</td><td class="r">${fmtCOP(a.monto)}</td><td>${escapeHtml(a.nota || '')}</td></tr>`).join('');
+    return `
+    <section class="fac">
+      <h3>Factura #${pad(f.folio)} <span class="fd">${f.fecha}</span></h3>
+      <table>
+        <thead><tr><th>Producto</th><th>Tamaño</th><th class="r">Cant.</th><th class="r">Precio unit.</th><th class="r">Desc.</th><th class="r">Subtotal</th></tr></thead>
+        <tbody>${filasItems}</tbody>
+        <tfoot><tr><td colspan="5" class="r">Total factura</td><td class="r b">${fmtCOP(f.total)}</td></tr></tfoot>
+      </table>
+      ${ab.length ? `<table class="ab"><thead><tr><th>Abonos recibidos</th><th class="r">Monto</th><th>Nota</th></tr></thead><tbody>${filasAb}</tbody>
+        <tfoot><tr><td class="r">Total abonado</td><td class="r b">${fmtCOP(abTot)}</td><td></td></tr></tfoot></table>` : '<p class="sa">Sin abonos registrados.</p>'}
+      <p class="saldo">${f.saldo > 0 ? 'Saldo pendiente de esta factura' : 'Factura pagada'}: <b>${fmtCOP(Math.max(f.saldo, 0))}</b></p>
+    </section>`;
+  }).join('');
+
+  return `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Estado de cuenta - ${escapeHtml(nombre || 'Cliente')}</title>
+<style>
+  *{box-sizing:border-box} body{font-family:Arial,Helvetica,sans-serif;color:#222;margin:0;padding:24px;background:#fff;font-size:13px}
+  .wrap{max-width:820px;margin:0 auto}
+  header{border-bottom:3px solid #c9a227;padding-bottom:12px;margin-bottom:16px}
+  header h1{margin:0;font-size:22px} header p{margin:4px 0 0;color:#555}
+  .cli{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+  .box{background:#faf6e8;border:1px solid #e6d9a8;border-radius:8px;padding:10px 14px;margin-bottom:18px;display:flex;gap:24px;flex-wrap:wrap}
+  .box div span{display:block;color:#666;font-size:11px;text-transform:uppercase}
+  .box div b{font-size:16px}
+  table{width:100%;border-collapse:collapse;margin:8px 0}
+  th,td{padding:6px 8px;border-bottom:1px solid #e5e5e5;text-align:left;vertical-align:top}
+  th{background:#f3f3f3;font-size:11px;text-transform:uppercase;color:#555}
+  .r{text-align:right} .b{font-weight:bold} small{color:#777}
+  tfoot td{border-top:2px solid #ccc;border-bottom:none;font-weight:bold}
+  h2{font-size:15px;margin:22px 0 6px} .fac{margin-top:20px;padding-top:6px;page-break-inside:avoid}
+  .fac h3{margin:0 0 4px;font-size:15px;background:#222;color:#fff;padding:7px 10px;border-radius:6px}
+  .fd{float:right;font-weight:normal;font-size:12px;color:#ddd}
+  .ab th{background:#eaf6ee} .tag{font-size:10px;background:#eee;padding:1px 5px;border-radius:4px}
+  .saldo{text-align:right;margin:6px 0;font-size:14px} .sa{color:#777;font-size:12px}
+  .total{margin-top:22px;border:2px solid #c9a227;border-radius:8px;padding:12px 16px;text-align:right;font-size:18px}
+  footer{margin-top:22px;color:#666;font-size:12px;text-align:center}
+  .noprint{margin-bottom:16px;text-align:right} .noprint button{padding:9px 16px;font-size:14px;cursor:pointer;border:0;background:#c9a227;border-radius:6px;font-weight:bold}
+  @media print{.noprint{display:none} body{padding:0}}
+</style></head><body><div class="wrap">
+  <div class="noprint"><button onclick="window.print()">🖨️ Imprimir / Guardar como PDF</button></div>
+  <header><h1>${biz}</h1><p>Estado de cuenta detallado${wa ? ` · WhatsApp ${wa}` : ''}</p></header>
+  <div class="cli"><div><b>Cliente:</b> ${escapeHtml(nombre || 'Sin nombre')}</div><div><b>Fecha del informe:</b> ${hoy}</div></div>
+  ${facturas.length === 0 ? '<p>✅ No tienes saldo pendiente. ¡Estás al día!</p>' : `
+  <div class="box">
+    <div><span>Facturas</span><b>${facturas.length}</b></div>
+    <div><span>Total facturado</span><b>${fmtCOP(totFact)}</b></div>
+    <div><span>Total abonado</span><b>${fmtCOP(totAbon)}</b></div>
+    <div><span>Saldo pendiente</span><b>${fmtCOP(totSaldo)}</b></div>
+  </div>
+  <h2>Resumen de facturas</h2>
+  <table><thead><tr><th>Factura</th><th>Fecha</th><th class="r">Total</th><th class="r">Abonado</th><th class="r">Saldo</th><th>Estado</th></tr></thead>
+  <tbody>${resumen}</tbody>
+  <tfoot><tr><td colspan="2">Totales</td><td class="r">${fmtCOP(totFact)}</td><td class="r">${fmtCOP(totAbon)}</td><td class="r">${fmtCOP(totSaldo)}</td><td></td></tr></tfoot></table>
+  <h2>Detalle de cada factura</h2>
+  ${detalle}
+  <div class="total">Saldo total pendiente: <b>${fmtCOP(totSaldo)}</b></div>`}
+  <footer>¡Gracias por tu confianza! 🌸${wa ? `<br>Cualquier duda, escríbenos: ${wa}` : ''}</footer>
+</div></body></html>`;
+}
+
+function buildInformeWhatsApp(nombre, incluirPagadas) {
+  const facturas = informeFacturasDeCliente(nombre, incluirPagadas);
+  const pad = n => String(n).padStart(4, '0');
+  const L = [];
+  L.push(`📋 *Estado de cuenta detallado — ${DATA.config.business_name}*`);
+  L.push(`Cliente: ${nombre || 'Sin nombre'}`);
+  L.push(`Fecha: ${new Date().toISOString().slice(0, 10)}`);
+  L.push('');
+  if (facturas.length === 0) {
+    L.push('✅ No tienes saldo pendiente. ¡Estás al día!');
+  } else {
+    facturas.forEach(f => {
+      const ab = f.abonos.slice().sort((a, b) => a.fecha.localeCompare(b.fecha));
+      const abTot = ab.reduce((x, y) => x + y.monto, 0);
+      L.push(`🧾 *Factura #${pad(f.folio)}* — ${f.fecha}`);
+      informeItemsDeFactura(f).forEach(it => {
+        L.push(`• ${it.nombre} · ${tamLabel(it.tamano)} x${it.cantidad} — ${fmtCOP(it.total)}${it.es_recarga ? ' (Recarga)' : ''}${it.descuento_pct ? ` (Desc. ${it.descuento_pct}%)` : ''}`);
+      });
+      L.push(`Total: ${fmtCOP(f.total)}`);
+      if (ab.length) {
+        ab.forEach(a => L.push(`   ✔ Abono ${a.fecha}: ${fmtCOP(a.monto)}`));
+        L.push(`Abonado: ${fmtCOP(abTot)}`);
+      }
+      L.push(f.saldo > 0 ? `*Saldo: ${fmtCOP(f.saldo)}*` : '✅ Pagada');
+      L.push('');
+    });
+    const totSaldo = facturas.reduce((a, f) => a + f.saldo, 0);
+    L.push(`*SALDO TOTAL PENDIENTE: ${fmtCOP(totSaldo)}*`);
+  }
+  L.push('');
+  L.push('¡Gracias por tu confianza! 🌸');
+  if (DATA.config.business_whatsapp) L.push(`Cualquier duda, escríbenos: +${DATA.config.business_whatsapp}`);
+  return L.join('\n');
+}
+
+function openInformeModal(facturaId) {
+  const sel = document.getElementById('informeClienteSelect');
+  const mapa = {};
+  DATA.facturas.filter(f => f.saldo > 0).forEach(f => {
+    const k = f.cliente || '';
+    mapa[k] = mapa[k] || { saldo: 0, n: 0 };
+    mapa[k].saldo += f.saldo; mapa[k].n++;
+  });
+  const nombres = Object.keys(mapa).sort((a, b) => a.localeCompare(b));
+  if (nombres.length === 0) { showToast('No hay cuentas pendientes.', true); return; }
+  sel.innerHTML = nombres.map(n =>
+    `<option value="${escapeAttr(n)}">${escapeHtml(n || 'Sin nombre')} — ${mapa[n].n} fact. · ${fmtCOP(mapa[n].saldo)}</option>`).join('');
+  let pre = null;
+  if (facturaId) { const f = DATA.facturas.find(x => x.id === facturaId); if (f) pre = f.cliente || ''; }
+  else {
+    const q = (document.getElementById('cuentasSearch').value || '').trim().toLowerCase();
+    if (q) pre = nombres.find(n => n.toLowerCase().includes(q)) ?? null;
+  }
+  if (pre !== null && nombres.includes(pre)) sel.value = pre;
+  document.getElementById('informeIncluirPagadas').checked = false;
+  document.getElementById('informeOverlay').classList.add('open');
+}
+document.getElementById('openInformeBtn').addEventListener('click', () => openInformeModal(null));
+document.getElementById('cancelInformeBtn').addEventListener('click', () => {
+  document.getElementById('informeOverlay').classList.remove('open');
+});
+document.getElementById('informeVerBtn').addEventListener('click', () => {
+  const nombre = document.getElementById('informeClienteSelect').value;
+  const incl = document.getElementById('informeIncluirPagadas').checked;
+  const w = window.open('', '_blank');
+  if (!w) { showToast('El navegador bloqueó la ventana. Permite pop-ups para este sitio.', true); return; }
+  w.document.open(); w.document.write(buildInformeHTML(nombre, incl)); w.document.close();
+});
+document.getElementById('informeWhatsappBtn').addEventListener('click', () => {
+  const nombre = document.getElementById('informeClienteSelect').value;
+  const incl = document.getElementById('informeIncluirPagadas').checked;
+  const cli = DATA.clientes.find(c => c.nombre === nombre);
+  const fac = DATA.facturas.find(f => (f.cliente || '') === nombre && f.cliente_tel);
+  sendTicketWhatsApp(buildInformeWhatsApp(nombre, incl), (cli && cli.telefono) || (fac && fac.cliente_tel) || '');
 });
 
 function openAbonoModal(facturaId) {

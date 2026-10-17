@@ -420,7 +420,8 @@
     <div class="filter-row" style="margin-bottom:16px;">
       <button class="pill-btn active" data-cfilter="pendientes">Pendientes</button>
       <button class="pill-btn" data-cfilter="todas">Todas</button>
-      <input type="text" class="search-input" id="cuentasSearch" placeholder="Buscar cliente..." style="margin-bottom:0; margin-left:auto; max-width:220px;">
+      <button class="btn small" id="openInformeBtn" title="Informe detallado de cuentas pendientes para enviar al cliente" style="margin-left:auto;">📄 Informe para cliente</button>
+      <input type="text" class="search-input" id="cuentasSearch" placeholder="Buscar cliente..." style="margin-bottom:0; max-width:220px;">
     </div>
     <div class="table-wrap fc-table-wrap">
       <table class="fc-table">
@@ -440,6 +441,23 @@
     </div>
   </div>
 </section>
+
+<!-- INFORME DETALLADO DE CLIENTE MODAL -->
+<div class="overlay" id="informeOverlay">
+  <div class="modal">
+    <h3>📄 Informe detallado para el cliente</h3>
+    <p class="hint">Muestra cada factura con sus productos, fechas, abonos y saldo pendiente.</p>
+    <div class="field" style="margin-bottom:12px;"><label>Cliente</label><select id="informeClienteSelect"></select></div>
+    <label style="display:flex;gap:8px;align-items:center;margin-bottom:14px;font-size:13px;color:var(--muted);">
+      <input type="checkbox" id="informeIncluirPagadas"> Incluir también facturas ya pagadas
+    </label>
+    <div class="modal-actions" style="flex-wrap:wrap;">
+      <button class="btn" id="cancelInformeBtn">Cerrar</button>
+      <button class="btn" id="informeWhatsappBtn">📤 WhatsApp</button>
+      <button class="btn primary" id="informeVerBtn">📄 Ver / Guardar PDF</button>
+    </div>
+  </div>
+</div>
 
 <!-- ABONO MODAL -->
 <div class="overlay" id="abonoOverlay">
