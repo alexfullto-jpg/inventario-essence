@@ -876,7 +876,15 @@ def api_compra_create():
         elif tipo in ("frasco10", "frasco30", "frasco50"):
             size = tipo.replace("frasco", "")
             fk = f"frasco_f{size}"
-            conn.execute(f"UPDATE config SET {fk}_stock = {fk}_stock + ? WHERE id = 1", (int(cantidad),))
+            config = get_config(conn)
+            prev_stock = config.get(f"{fk}_stock") or 0
+            prev_cost = config.get(f"{fk}_cost") or 0
+            new_stock = prev_stock + int(cantidad)
+            new_cost = prev_cost
+            if costo > 0 and new_stock > 0:
+                new_cost = round(((prev_cost * prev_stock + costo) / new_stock) * 100) / 100
+            conn.execute(f"UPDATE config SET {fk}_stock = ?, {fk}_cost = ? WHERE id = 1",
+                         (new_stock, new_cost))
             detalle = f"+{int(cantidad)} frascos de {size}ML"
             ref_nombre = f"Frascos {size}ML"
         else:
