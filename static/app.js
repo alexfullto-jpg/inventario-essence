@@ -281,18 +281,20 @@ function renderDashboard() {
   `;
 
   // ── VALOR DEL INVENTARIO ──────────────────────────────────────────────────
-  const valorFragancias = DATA.fragancias.reduce((s, f) => s + (f.stock_gr || 0) * (f.cost_per_gr || 0), 0);
+  const valorFragancias = DATA.fragancias.filter(f => !isTerminado(f)).reduce((s, f) => s + (f.stock_gr || 0) * (f.cost_per_gr || 0), 0);
+  const valorSplash = DATA.fragancias.filter(f => isTerminado(f)).reduce((s, f) => s + (f.stock_gr || 0) * (f.cost_per_gr || 0), 0);
+  const unidadesSplash = DATA.fragancias.filter(f => isTerminado(f)).reduce((s, f) => s + (f.stock_gr || 0), 0);
   const c = DATA.config;
   const valorAlcohol    = (c.alcohol_stock_gr || 0)  * (c.alcohol_cost_per_gr || 0);
   const valorFrascos10  = (c.frasco_f10_stock || 0)  * (c.frasco_f10_cost || 0);
   const valorFrascos30  = (c.frasco_f30_stock || 0)  * (c.frasco_f30_cost || 0);
   const valorFrascos50  = (c.frasco_f50_stock || 0)  * (c.frasco_f50_cost || 0);
   const valorOtros      = DATA.otrosProductos.reduce((s, o) => s + (o.stock || 0) * (o.costo_unidad || 0), 0);
-  const valorTotalInv   = valorFragancias + valorAlcohol + valorFrascos10 + valorFrascos30 + valorFrascos50 + valorOtros;
+  const valorTotalInv   = valorFragancias + valorSplash + valorAlcohol + valorFrascos10 + valorFrascos30 + valorFrascos50 + valorOtros;
 
   // ── RESUMEN POR TAMAÑO (mes actual) ───────────────────────────────────────
-  const porTam = { 10: 0, 30: 0, 50: 0 };
-  const ingTam = { 10: 0, 30: 0, 50: 0 };
+  const porTam = { 10: 0, 30: 0, 50: 0, 250: 0 };
+  const ingTam = { 10: 0, 30: 0, 50: 0, 250: 0 };
   ventasMes.forEach(v => {
     porTam[v.tamano] = (porTam[v.tamano] || 0) + v.cantidad;
     ingTam[v.tamano] = (ingTam[v.tamano] || 0) + v.total;
@@ -301,11 +303,22 @@ function renderDashboard() {
   // Render sección inventario + tamaños
   const invSection = document.getElementById('dashInventarioTamanos');
   if (invSection) {
-    const total10 = porTam[10] || 0, total30 = porTam[30] || 0, total50 = porTam[50] || 0;
-    const totalUnd = total10 + total30 + total50 || 1;
-    const pct10 = (total10 / totalUnd * 100).toFixed(0);
-    const pct30 = (total30 / totalUnd * 100).toFixed(0);
-    const pct50 = (total50 / totalUnd * 100).toFixed(0);
+    const tamList = [10, 30, 50, 250];
+    const totalUnd = tamList.reduce((a, t) => a + (porTam[t] || 0), 0);
+    const tamCardsHtml = tamList.map(t => {
+      const q = porTam[t] || 0;
+      const pct = (q / (totalUnd || 1) * 100).toFixed(0);
+      const lbl = t === 250 ? '250 ML · Splash' : `${t} ML`;
+      return `
+          <div class="tam-card">
+            <div class="tam-ml">${lbl}</div>
+            <div class="tam-qty">${q}</div>
+            <div class="tam-label">unidades</div>
+            <div class="tam-ing">${fmtCOP(ingTam[t] || 0)}</div>
+            <div class="tam-bar-wrap"><div class="tam-bar" style="width:${pct}%"></div></div>
+            <div class="tam-pct">${pct}% del total</div>
+          </div>`;
+    }).join('');
 
     invSection.innerHTML = `
     <div class="two-col" style="margin-bottom:18px;">
@@ -335,6 +348,7 @@ function renderDashboard() {
             <span class="inv-label">Frascos 50ML (${c.frasco_f50_stock || 0} unds)</span>
             <span class="inv-val">${fmtCOP(valorFrascos50)}</span>
           </div>
+          ${(valorSplash > 0 || unidadesSplash > 0) ? `<div class="inv-row"><span class="inv-label">Splash 250ML (${Math.floor(unidadesSplash)} unds)</span><span class="inv-val">${fmtCOP(valorSplash)}</span></div>` : ''}
           ${valorOtros > 0 ? `<div class="inv-row"><span class="inv-label">Otros productos</span><span class="inv-val">${fmtCOP(valorOtros)}</span></div>` : ''}
           <div class="inv-row inv-row-total">
             <span class="inv-label">TOTAL INVERTIDO</span>
@@ -346,34 +360,9 @@ function renderDashboard() {
       <!-- VENTAS POR TAMAÑO -->
       <div class="card">
         <h3>📦 Ventas por tamaño — este mes</h3>
-        ${total10 + total30 + total50 === 0
+        ${totalUnd === 0
           ? '<div class="empty-note">Sin ventas este mes aún.</div>'
-          : `
-        <div class="tam-grid">
-          <div class="tam-card">
-            <div class="tam-ml">10 ML</div>
-            <div class="tam-qty">${total10}</div>
-            <div class="tam-label">unidades</div>
-            <div class="tam-ing">${fmtCOP(ingTam[10] || 0)}</div>
-            <div class="tam-bar-wrap"><div class="tam-bar" style="width:${pct10}%"></div></div>
-            <div class="tam-pct">${pct10}% del total</div>
-          </div>
-          <div class="tam-card">
-            <div class="tam-ml">30 ML</div>
-            <div class="tam-qty">${total30}</div>
-            <div class="tam-label">unidades</div>
-            <div class="tam-ing">${fmtCOP(ingTam[30] || 0)}</div>
-            <div class="tam-bar-wrap"><div class="tam-bar" style="width:${pct30}%"></div></div>
-            <div class="tam-pct">${pct30}% del total</div>
-          </div>
-          <div class="tam-card">
-            <div class="tam-ml">50 ML</div>
-            <div class="tam-qty">${total50}</div>
-            <div class="tam-label">unidades</div>
-            <div class="tam-ing">${fmtCOP(ingTam[50] || 0)}</div>
-            <div class="tam-bar-wrap"><div class="tam-bar" style="width:${pct50}%"></div></div>
-            <div class="tam-pct">${pct50}% del total</div>
-          </div>
+          : `<div class="tam-grid">${tamCardsHtml}
         </div>`}
       </div>
 
